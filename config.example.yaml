@@ -1,0 +1,145 @@
+# Kavita SafeUploader Configuration
+# Copy this file to config.yaml and customize for your installation
+
+server:
+  host: "0.0.0.0"
+  port: 5050
+  debug: false
+  cors_origins:
+    - "http://localhost:5050"
+    - "http://localhost:5173"  # Vite dev server
+  secret_key: "CHANGE-THIS-TO-A-RANDOM-SECRET-KEY"  # Generate with: openssl rand -hex 32
+
+folders:
+  quarantine: "./quarantine"
+  unsorted: "./unsorted"
+  library: "./library"  # Path to Kavita library for duplicate checking
+
+upload:
+  max_file_size_mb: 25
+  allowed_extensions:
+    - "epub"
+    - "pdf"
+    - "cbz"
+    - "cbr"
+    - "mobi"
+    - "azw3"
+  allowed_mime_types:
+    - "application/epub+zip"
+    - "application/pdf"
+    - "application/x-cbr"
+    - "application/x-cbz"
+    - "application/zip"
+    - "application/vnd.amazon.ebook"
+    - "application/x-mobipocket-ebook"
+
+security:
+  enable_rate_limiting: true
+  rate_limit_uploads_per_minute: 10
+  enable_csrf_protection: true
+  file_permissions_mode: 384  # 0o600 in decimal (rw-------)
+  directory_permissions_mode: 448  # 0o700 in decimal (rwx------)
+  sanitize_filenames: true
+
+scanning:
+  enabled: false  # Set to true when VirusTotal API key is configured
+  provider: virustotal  # Only virustotal supported for now
+  virustotal_api_key: ""  # Add your VirusTotal API key here (or use env: SCANNING_VIRUSTOTAL_API_KEY)
+  virustotal_timeout: 60
+  polling_interval_sec: 30  # How often to poll VirusTotal for results (default: 30 seconds)
+  max_retries: 20  # Maximum polling attempts (default: 20 = 10 minutes max)
+  auto_delete_infected: false  # If true, automatically delete infected files
+  auto_skip_known_hashes: true  # Skip scanning if hash already scanned (saves API quota)
+
+metadata:
+  enabled: true  # Step 3: Enable metadata extraction
+  extract_on_upload: false  # Automatically extract metadata after scan
+  allow_user_editing: true  # Allow users to edit extracted metadata
+  required_fields:  # Fields that must be filled before proceeding
+    - "title"
+    - "author"
+  auto_save_on_no_changes: true  # Auto-save if user doesn't edit anything
+  preview_settings:
+    max_pages: 3  # Maximum pages to show in preview
+    width: 1024  # Preview image width in pixels
+    height: 768  # Preview image height in pixels
+
+duplicate_detection:
+  enabled: true  # Hash-based duplicate detection (Step 2)
+  hash_algorithm: sha256  # Algorithm for file hashing
+  check_by_hash: true  # Primary duplicate check method
+  check_by_size: true  # Secondary check for performance
+  check_by_name: false  # Disabled since we use UUID filenames
+  discard_exact_hash: true  # If true, reject exact duplicates
+  rename_duplicates: true  # If false and not exact duplicate, discard
+  rename_pattern: "{name}_{timestamp}{ext}"
+
+preview:
+  enabled: true  # Enable file preview generation
+  max_pages: 3  # Maximum pages to extract for preview
+  width: 1024  # Preview image width in pixels
+  height: 768  # Preview image height in pixels
+  supported_types:  # File types that support preview
+    - pdf
+    - epub
+  cache_previews: true  # Cache generated previews (auto-deleted after 24h)
+  preview_format: base64  # Format for preview images (base64 encoding)
+  auto_cleanup_hours: 24  # Auto-delete preview cache after N hours
+
+moving:
+  enabled: true  # Step 4: Enable moving files from quarantine to library
+  unsorted_dir: "./unsorted"  # Destination for new files
+  kavita_library_dirs:  # Additional library paths to check for duplicates
+    - "./library"
+  rename_on_name_conflict: true  # Rename files with same title/author but different hash
+  rename_pattern: "{title} - {author} (duplicate_{timestamp}){ext}"
+  discard_on_exact_duplicate: true  # Discard files with exact hash match
+  keep_duplicate_log: true  # Log all duplicate rejections
+  verify_integrity_post_move: true  # Re-hash file after move to verify
+  dry_run: false  # If true, simulate moves without actually moving files
+  checksum_manifest: true  # Maintain CSV manifest of all moved files
+  manifest_path: "logs/manifest.csv"
+  log_moves: true  # Log all move operations
+  atomic_operations: true  # Use atomic file operations (os.replace)
+  cleanup_quarantine_on_success: true  # Delete quarantine file after successful move
+  notification:
+    email_enabled: false  # Send email on successful move
+    email_recipients: []
+    webhook_enabled: false  # POST to webhook on move completion
+    webhook_url: ""
+
+disk_protection:
+  enabled: true  # Enable disk space protection and monitoring
+  min_free_space_percent: 10.0  # Minimum percentage of free disk space required (default: 10%)
+  reserve_space_bytes: 1073741824  # Reserve space in bytes (default: 1 GB)
+  max_quarantine_size_bytes: 10737418240  # Maximum total size of quarantine directory (default: 10 GB, 0 = unlimited)
+  max_single_upload_size_mb: 100  # Maximum size for a single upload (additional to max_file_size_mb, default: 100 MB)
+  auto_cleanup_enabled: true  # Automatically delete old quarantine files
+  auto_cleanup_age_hours: 72  # Delete files older than N hours (default: 72 = 3 days)
+  cleanup_interval_minutes: 60  # How often to run automatic cleanup (default: 60 = hourly)
+  emergency_cleanup_threshold_percent: 5.0  # Trigger emergency cleanup when free space < N% (default: 5%)
+  alert_threshold_percent: 15.0  # Alert threshold for disk space warnings (default: 15%)
+
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "json"  # Format for log file (always JSON for parsing)
+  console_format: "text"  # Format for console output: "text" (readable) or "json"
+  console_level: "INFO"  # Console can have different level than file
+  file: "logs/safeuploader.log"
+  max_bytes: 10485760  # 10MB
+  backup_count: 5
+
+api_protection:
+  enabled: true
+  require_header: true
+  header_name: "X-UI-Request"
+  header_value: "1"
+  disable_docs: true
+  allow_docs_in_debug: true
+  
+  # Module-specific logging levels
+  modules:
+    scan: "INFO"  # Set to DEBUG for detailed VirusTotal API logging
+    upload: "INFO"
+    duplicate: "INFO"
+
