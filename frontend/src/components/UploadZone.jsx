@@ -1,13 +1,27 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { uploadFile } from '../services/api'
+import { useAuth } from '../contexts/AuthContext'
 
 export default function UploadZone({ config, onUploadComplete }) {
+  const { isAuthenticated, requireAuth, authEnabled, user, loading: authLoading } = useAuth()
   const [isDragging, setIsDragging] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadStage, setUploadStage] = useState('idle') // idle, uploading, quarantined, error
   const [error, setError] = useState(null)
   const [selectedFile, setSelectedFile] = useState(null)
+  
+  // Check if authentication is required for uploads
+  // Only block if auth is enabled, required, and user is actually not authenticated
+  // Wait for auth to finish loading before checking
+  const needsAuth = !authLoading && authEnabled && requireAuth && !isAuthenticated
+  
+  // Debug logging (can be removed after fixing)
+  useEffect(() => {
+    if (authEnabled) {
+      console.debug('UploadZone auth state:', { authEnabled, requireAuth, isAuthenticated, authLoading, user })
+    }
+  }, [authEnabled, requireAuth, isAuthenticated, authLoading, user])
 
   const maxSizeMB = config?.upload?.max_file_size_mb || 25
   const allowedExtensions = config?.upload?.allowed_extensions || []
@@ -71,9 +85,28 @@ export default function UploadZone({ config, onUploadComplete }) {
         }, 3000)
       }
     } catch (err) {
-      const errorMessage = err.response?.data?.detail?.message || 'Upload failed'
-      setError(errorMessage)
-      setUploadStage('error')
+      console.error('Upload error:', err)
+      
+      // Handle different error types
+      if (err.response?.status === 401) {
+        const errorMessage = err.response?.data?.detail?.message || err.response?.data?.message || 'Authentication required. Please log in to upload files.'
+        setError(errorMessage)
+        setUploadStage('error')
+      } else if (err.response?.status === 422) {
+        // Validation error
+        const errorMessage = err.response?.data?.message || err.response?.data?.detail?.message || 'File upload validation failed. Please check your file.'
+        setError(errorMessage)
+        setUploadStage('error')
+      } else if (err.response?.status === 413 || err.response?.status === 507) {
+        // File too large or insufficient storage
+        const errorMessage = err.response?.data?.detail?.message || err.response?.data?.message || 'File is too large or storage is insufficient.'
+        setError(errorMessage)
+        setUploadStage('error')
+      } else {
+        const errorMessage = err.response?.data?.detail?.message || err.response?.data?.message || err.response?.data?.detail || err.message || 'Upload failed. Please try again.'
+        setError(errorMessage)
+        setUploadStage('error')
+      }
     } finally {
       setIsUploading(false)
     }
@@ -149,6 +182,10 @@ export default function UploadZone({ config, onUploadComplete }) {
   }
 
   const getStageMessage = () => {
+    if (needsAuth) {
+      return 'Please log in to upload files'
+    }
+    
     switch (uploadStage) {
       case 'uploading':
         return `Uploading... ${uploadProgress}%`
@@ -160,6 +197,16 @@ export default function UploadZone({ config, onUploadComplete }) {
         return 'Drag and drop your e-book here'
     }
   }
+  
+  const handleClick = () => {
+    if (needsAuth) {
+      setError('Please log in to upload files. Click the Login button in the header.')
+      return
+    }
+    if (!isUploading) {
+      document.getElementById('file-input').click()
+    }
+  }
 
   return (
     <div className="bg-white rounded-2xl shadow-lg p-8">
@@ -169,13 +216,14 @@ export default function UploadZone({ config, onUploadComplete }) {
           ${isDragging ? 'border-blue-500 bg-blue-50 scale-105' : 'border-gray-300 bg-gray-50'}
           ${uploadStage === 'quarantined' ? 'border-green-500 bg-green-50' : ''}
           ${uploadStage === 'error' ? 'border-red-500 bg-red-50' : ''}
-          ${isUploading ? 'cursor-not-allowed' : 'cursor-pointer hover:border-blue-400 hover:bg-blue-50'}
+          ${needsAuth ? 'border-gray-300 bg-gray-100 cursor-not-allowed opacity-60' : ''}
+          ${isUploading ? 'cursor-not-allowed' : needsAuth ? '' : 'cursor-pointer hover:border-blue-400 hover:bg-blue-50'}
         `}
-        onDragEnter={handleDragEnter}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        onClick={() => !isUploading && document.getElementById('file-input').click()}
+        onDragEnter={needsAuth ? undefined : handleDragEnter}
+        onDragOver={needsAuth ? undefined : handleDragOver}
+        onDragLeave={needsAuth ? undefined : handleDragLeave}
+        onDrop={needsAuth ? undefined : handleDrop}
+        onClick={handleClick}
       >
         <input
           id="file-input"

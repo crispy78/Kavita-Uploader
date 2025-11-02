@@ -1,4 +1,5 @@
-"""Test suite for Kavita SafeUploader backend."""
+"""Test suite for Kavita Uploader backend."""
+
 
 
 

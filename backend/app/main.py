@@ -1,10 +1,11 @@
 """FastAPI application entry point."""
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -30,7 +31,7 @@ async def lifespan(app: FastAPI):
     
     # Setup logger with config
     setup_logger(
-        "safeuploader",
+        "uploader",
         log_level=config.logging.level,
         log_file=config.logging.file,
         max_bytes=config.logging.max_bytes,
@@ -88,6 +89,27 @@ async def log_requests(request: Request, call_next):
     )
     response = await call_next(request)
     return response
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Handle request validation errors (422)."""
+    app_logger.error(
+        f"Request validation error: {str(exc)}",
+        extra={
+            "path": request.url.path,
+            "errors": exc.errors(),
+            "body": str(exc.body)[:500] if hasattr(exc, 'body') else None,
+        }
+    )
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "Validation error",
+            "message": "Request validation failed. Please check your file upload.",
+            "details": exc.errors(),
+        }
+    )
 
 
 @app.exception_handler(Exception)

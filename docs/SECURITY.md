@@ -2,7 +2,7 @@
 
 ## Security Design Overview
 
-Kavita SafeUploader implements a defense-in-depth security approach with multiple layers of protection.
+Kavita Uploader implements a defense-in-depth security approach with multiple layers of protection.
 
 ## Security Features
 
@@ -79,7 +79,7 @@ Quarantined files:    0600 (owner read/write only)
 {
   "timestamp": "2024-01-01T12:00:00Z",
   "level": "INFO",
-  "logger": "safeuploader",
+  "logger": "uploader",
   "message": "File uploaded successfully",
   "upload_uuid": "550e8400-e29b-41d4-a716-446655440000",
   "filename": "book.epub",
@@ -232,10 +232,10 @@ sudo chmod 700 /app/quarantine /app/unsorted
 
 ```bash
 # Monitor logs for suspicious activity
-tail -f logs/safeuploader.log | jq 'select(.level == "ERROR")'
+tail -f logs/uploader.log | jq 'select(.level == "ERROR")'
 
 # Alert on failed uploads
-grep "Upload failed" logs/safeuploader.log | mail -s "Upload Failures" admin@example.com
+grep "Upload failed" logs/uploader.log | mail -s "Upload Failures" admin@example.com
 
 # Monitor quarantine directory size
 watch -n 60 'du -sh quarantine/'
@@ -316,7 +316,7 @@ pip install safety
 safety check
 
 # Scan Docker image (if using containers)
-docker scan kavita-safeuploader
+docker scan kavita-uploader
 
 # Static analysis
 pip install bandit

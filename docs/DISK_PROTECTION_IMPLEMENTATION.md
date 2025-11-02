@@ -591,5 +591,5 @@ curl -X POST http://localhost:5050/api/system/cleanup
 
 **Implementation Complete!** ✅
 
-The Kavita SafeUploader is now protected against disk exhaustion DoS attacks through a comprehensive, configurable, multi-layer protection system.
+The Kavita Uploader is now protected against disk exhaustion DoS attacks through a comprehensive, configurable, multi-layer protection system.
 

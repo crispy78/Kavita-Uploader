@@ -1,0 +1,32 @@
+[Unit]
+Description=Kavita E-Book Upload Service
+After=network.target
+
+[Service]
+Type=simple
+User=kavita-upload
+Group=kavita-upload
+WorkingDirectory=/opt/Kavita-Upload/backend
+Environment=PYTHONPATH=/opt/Kavita-Upload/backend
+Environment="PATH=/opt/Kavita-Upload/backend/venv/bin:/usr/local/bin:/usr/bin:/bin"
+# Optional: Specify database path (defaults to /opt/Kavita-Upload/safeuploader.db)
+# Environment="DATABASE_PATH=/opt/Kavita-Upload/safeuploader.db"
+ExecStart=/opt/Kavita-Upload/backend/venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 5050
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kavita-upload
+
+# Security settings (adjust paths as needed for your system)
+# Note: These security options may need adjustment based on your directory structure
+NoNewPrivileges=true
+# PrivateTmp=true  # Commented out - may interfere with file operations
+# ProtectSystem=strict  # Commented out - need write access for database and logs
+# ProtectHome=true  # Commented out - may interfere with file access
+# Adjust these paths based on where your data directories are located
+# ReadWritePaths=/opt/Kavita-Upload /var/lib/kavita-upload /var/log/kavita-upload
+
+[Install]
+WantedBy=multi-user.target
+

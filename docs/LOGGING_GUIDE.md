@@ -1,4 +1,4 @@
-# Logging Guide - Kavita SafeUploader
+# Logging Guide - Kavita Uploader
 
 Complete guide to logging, monitoring, and troubleshooting.
 
@@ -23,7 +23,7 @@ logging:
   console_level: "INFO"      # Console log level (can be different from file)
   format: "json"             # File format (always JSON for parsing)
   console_format: "text"     # Console format: "text" (human-readable) or "json"
-  file: "logs/safeuploader.log"
+  file: "logs/uploader.log"
   max_bytes: 10485760        # 10MB per file
   backup_count: 5            # Keep 5 rotated logs
 ```
@@ -48,7 +48,7 @@ All file logs are in JSON for easy parsing:
 {
   "timestamp": "2024-01-01T12:00:00.123456Z",
   "level": "INFO",
-  "logger": "safeuploader.scan",
+  "logger": "uploader.scan",
   "module": "virustotal",
   "function": "scan_file",
   "message": "✓ Scan results: CLEAN - 0/70 engines detected threats",
@@ -76,33 +76,33 @@ Human-readable console output:
 
 **Follow all logs:**
 ```bash
-tail -f logs/safeuploader.log
+tail -f logs/uploader.log
 ```
 
 **Pretty-print JSON logs:**
 ```bash
-tail -f logs/safeuploader.log | jq '.'
+tail -f logs/uploader.log | jq '.'
 ```
 
 **Colorized output:**
 ```bash
-tail -f logs/safeuploader.log | jq -C '.'
+tail -f logs/uploader.log | jq -C '.'
 ```
 
 ### Systemd Service Logs
 
 ```bash
 # Follow logs
-journalctl -u kavita-safeuploader -f
+journalctl -u kavita-uploader -f
 
 # View last 100 lines
-journalctl -u kavita-safeuploader -n 100
+journalctl -u kavita-uploader -n 100
 
 # Show logs from last hour
-journalctl -u kavita-safeuploader --since "1 hour ago"
+journalctl -u kavita-uploader --since "1 hour ago"
 
 # Show only errors
-journalctl -u kavita-safeuploader -p err
+journalctl -u kavita-uploader -p err
 ```
 
 ## Filtering & Searching
@@ -111,10 +111,10 @@ journalctl -u kavita-safeuploader -p err
 
 ```bash
 # Show only errors
-jq 'select(.level == "ERROR")' logs/safeuploader.log
+jq 'select(.level == "ERROR")' logs/uploader.log
 
 # Show warnings and errors
-jq 'select(.level == "WARNING" or .level == "ERROR")' logs/safeuploader.log
+jq 'select(.level == "WARNING" or .level == "ERROR")' logs/uploader.log
 ```
 
 ### By Upload UUID
@@ -123,46 +123,46 @@ Track a specific file through the entire pipeline:
 
 ```bash
 UUID="550e8400-e29b-41d4-a716-446655440000"
-jq "select(.upload_uuid == \"$UUID\")" logs/safeuploader.log
+jq "select(.upload_uuid == \"$UUID\")" logs/uploader.log
 ```
 
 ### By Module/Function
 
 ```bash
 # All scan-related logs
-jq 'select(.module == "virustotal")' logs/safeuploader.log
+jq 'select(.module == "virustotal")' logs/uploader.log
 
 # All upload operations
-jq 'select(.function == "save_to_quarantine")' logs/safeuploader.log
+jq 'select(.function == "save_to_quarantine")' logs/uploader.log
 ```
 
 ### By Scan Phase
 
 ```bash
 # Show hash checking
-jq 'select(.scan_phase == "check_hash")' logs/safeuploader.log
+jq 'select(.scan_phase == "check_hash")' logs/uploader.log
 
 # Show upload phase
-jq 'select(.scan_phase == "upload")' logs/safeuploader.log
+jq 'select(.scan_phase == "upload")' logs/uploader.log
 
 # Show polling
-jq 'select(.scan_phase == "poll")' logs/safeuploader.log
+jq 'select(.scan_phase == "poll")' logs/uploader.log
 
 # Show completed scans
-jq 'select(.scan_phase == "complete")' logs/safeuploader.log
+jq 'select(.scan_phase == "complete")' logs/uploader.log
 ```
 
 ### By Scan Result
 
 ```bash
 # Show infected files
-jq 'select(.scan_result == "malicious")' logs/safeuploader.log
+jq 'select(.scan_result == "malicious")' logs/uploader.log
 
 # Show clean files
-jq 'select(.scan_result == "clean")' logs/safeuploader.log
+jq 'select(.scan_result == "clean")' logs/uploader.log
 
 # Show suspicious files
-jq 'select(.scan_result == "suspicious")' logs/safeuploader.log
+jq 'select(.scan_result == "suspicious")' logs/uploader.log
 ```
 
 ## Scan Tracking
@@ -175,19 +175,19 @@ Follow a file from upload to scan completion:
 UUID="your-upload-uuid"
 
 # Step 1: Upload
-jq "select(.upload_uuid == \"$UUID\" and .message | contains(\"uploaded\"))" logs/safeuploader.log
+jq "select(.upload_uuid == \"$UUID\" and .message | contains(\"uploaded\"))" logs/uploader.log
 
 # Step 2: Hash Check
-jq "select(.upload_uuid == \"$UUID\" and .scan_phase == \"check_hash\")" logs/safeuploader.log
+jq "select(.upload_uuid == \"$UUID\" and .scan_phase == \"check_hash\")" logs/uploader.log
 
 # Step 3: Upload to VirusTotal
-jq "select(.upload_uuid == \"$UUID\" and .scan_phase == \"upload\")" logs/safeuploader.log
+jq "select(.upload_uuid == \"$UUID\" and .scan_phase == \"upload\")" logs/uploader.log
 
 # Step 4: Polling
-jq "select(.upload_uuid == \"$UUID\" and .scan_phase == \"poll\")" logs/safeuploader.log
+jq "select(.upload_uuid == \"$UUID\" and .scan_phase == \"poll\")" logs/uploader.log
 
 # Step 5: Results
-jq "select(.upload_uuid == \"$UUID\" and .scan_phase == \"complete\")" logs/safeuploader.log
+jq "select(.upload_uuid == \"$UUID\" and .scan_phase == \"complete\")" logs/uploader.log
 ```
 
 ### Scan Statistics
@@ -195,19 +195,19 @@ jq "select(.upload_uuid == \"$UUID\" and .scan_phase == \"complete\")" logs/safe
 **Daily scan summary:**
 ```bash
 # Count scans by result
-jq -s 'group_by(.scan_result) | map({result: .[0].scan_result, count: length})' logs/safeuploader.log
+jq -s 'group_by(.scan_result) | map({result: .[0].scan_result, count: length})' logs/uploader.log
 ```
 
 **Average scan duration:**
 ```bash
 # Show scan durations
-jq 'select(.duration_ms != null) | {phase: .scan_phase, duration_ms}' logs/safeuploader.log
+jq 'select(.duration_ms != null) | {phase: .scan_phase, duration_ms}' logs/uploader.log
 ```
 
 **Today's scans:**
 ```bash
 TODAY=$(date +%Y-%m-%d)
-jq "select(.timestamp | startswith(\"$TODAY\") and .scan_phase == \"complete\")" logs/safeuploader.log
+jq "select(.timestamp | startswith(\"$TODAY\") and .scan_phase == \"complete\")" logs/uploader.log
 ```
 
 ## Troubleshooting
@@ -219,7 +219,7 @@ Enable verbose logging:
 1. **Temporary (current session):**
 ```bash
 # Stop service
-sudo systemctl stop kavita-safeuploader
+sudo systemctl stop kavita-uploader
 
 # Run with debug logging
 cd /tmp/Kavita-upload/backend
@@ -238,7 +238,7 @@ logging:
 
 Restart:
 ```bash
-sudo systemctl restart kavita-safeuploader
+sudo systemctl restart kavita-uploader
 ```
 
 ### Common Issues
@@ -247,36 +247,36 @@ sudo systemctl restart kavita-safeuploader
 
 ```bash
 # Check if file uploaded
-jq 'select(.message | contains("quarantined"))' logs/safeuploader.log | tail -1
+jq 'select(.message | contains("quarantined"))' logs/uploader.log | tail -1
 
 # Check for scan trigger
-jq 'select(.scan_phase == "check_hash")' logs/safeuploader.log | tail -5
+jq 'select(.scan_phase == "check_hash")' logs/uploader.log | tail -5
 
 # Check for errors
-jq 'select(.level == "ERROR")' logs/safeuploader.log | tail -10
+jq 'select(.level == "ERROR")' logs/uploader.log | tail -10
 ```
 
 #### 2. VirusTotal API Issues
 
 ```bash
 # Check API key errors
-jq 'select(.message | contains("API key"))' logs/safeuploader.log
+jq 'select(.message | contains("API key"))' logs/uploader.log
 
 # Check rate limits
-jq 'select(.status_code == 429)' logs/safeuploader.log
+jq 'select(.status_code == 429)' logs/uploader.log
 
 # Check timeouts
-jq 'select(.message | contains("timeout"))' logs/safeuploader.log
+jq 'select(.message | contains("timeout"))' logs/uploader.log
 ```
 
 #### 3. Slow Scans
 
 ```bash
 # Find slow polls
-jq 'select(.scan_phase == "poll" and .attempt > 10)' logs/safeuploader.log
+jq 'select(.scan_phase == "poll" and .attempt > 10)' logs/uploader.log
 
 # Check durations
-jq 'select(.duration_ms > 5000)' logs/safeuploader.log
+jq 'select(.duration_ms > 5000)' logs/uploader.log
 ```
 
 ### Log Rotation
@@ -284,16 +284,16 @@ jq 'select(.duration_ms > 5000)' logs/safeuploader.log
 Logs automatically rotate when reaching 10MB. View rotated logs:
 
 ```bash
-ls -lh logs/safeuploader.log*
-# safeuploader.log       (current)
-# safeuploader.log.1     (previous)
-# safeuploader.log.2
+ls -lh logs/uploader.log*
+# uploader.log       (current)
+# uploader.log.1     (previous)
+# uploader.log.2
 # ... (up to .5)
 ```
 
 View old logs:
 ```bash
-cat logs/safeuploader.log.1 | jq '.'
+cat logs/uploader.log.1 | jq '.'
 ```
 
 ### Exporting Logs
@@ -301,12 +301,12 @@ cat logs/safeuploader.log.1 | jq '.'
 **Export today's scans:**
 ```bash
 TODAY=$(date +%Y-%m-%d)
-jq "select(.timestamp | startswith(\"$TODAY\"))" logs/safeuploader.log > scans-$TODAY.json
+jq "select(.timestamp | startswith(\"$TODAY\"))" logs/uploader.log > scans-$TODAY.json
 ```
 
 **Export infected files:**
 ```bash
-jq 'select(.scan_result == "malicious")' logs/safeuploader.log > infected-files.json
+jq 'select(.scan_result == "malicious")' logs/uploader.log > infected-files.json
 ```
 
 **Generate CSV report:**
@@ -315,7 +315,7 @@ jq -r '
   select(.scan_phase == "complete") |
   [.timestamp, .upload_uuid, .uploaded_file, .scan_result, .malicious_count, .total_engines] |
   @csv
-' logs/safeuploader.log > scan-report.csv
+' logs/uploader.log > scan-report.csv
 ```
 
 ## Log Fields Reference
@@ -326,7 +326,7 @@ jq -r '
 |-------|-------------|---------|
 | `timestamp` | UTC timestamp | `2024-01-01T12:00:00Z` |
 | `level` | Log level | `INFO`, `ERROR` |
-| `logger` | Logger name | `safeuploader.scan` |
+| `logger` | Logger name | `uploader.scan` |
 | `module` | Python module | `virustotal` |
 | `function` | Function name | `scan_file` |
 | `message` | Log message | `File uploaded` |
@@ -364,10 +364,10 @@ jq -r '
 ```bash
 # Count VirusTotal API calls today
 TODAY=$(date +%Y-%m-%d)
-jq "select(.timestamp | startswith(\"$TODAY\") and .scan_phase == \"upload\")" logs/safeuploader.log | wc -l
+jq "select(.timestamp | startswith(\"$TODAY\") and .scan_phase == \"upload\")" logs/uploader.log | wc -l
 
 # Count hash checks (free lookups)
-jq "select(.timestamp | startswith(\"$TODAY\") and .scan_phase == \"check_hash\")" logs/safeuploader.log | wc -l
+jq "select(.timestamp | startswith(\"$TODAY\") and .scan_phase == \"check_hash\")" logs/uploader.log | wc -l
 ```
 
 ### Monitor Upload Volume
@@ -375,10 +375,10 @@ jq "select(.timestamp | startswith(\"$TODAY\") and .scan_phase == \"check_hash\"
 ```bash
 # Files uploaded today
 TODAY=$(date +%Y-%m-%d)
-jq "select(.timestamp | startswith(\"$TODAY\") and .message | contains(\"quarantined\"))" logs/safeuploader.log | wc -l
+jq "select(.timestamp | startswith(\"$TODAY\") and .message | contains(\"quarantined\"))" logs/uploader.log | wc -l
 
 # Average file size
-jq -s 'map(select(.file_size != null) | .file_size) | add / length' logs/safeuploader.log
+jq -s 'map(select(.file_size != null) | .file_size) | add / length' logs/uploader.log
 ```
 
 ## Alert Setup
@@ -389,7 +389,7 @@ Create `/usr/local/bin/check-infected.sh`:
 
 ```bash
 #!/bin/bash
-INFECTED=$(jq -r 'select(.scan_result == "malicious") | select(.timestamp | startswith("'$(date +%Y-%m-%d)'"))' /path/to/logs/safeuploader.log)
+INFECTED=$(jq -r 'select(.scan_result == "malicious") | select(.timestamp | startswith("'$(date +%Y-%m-%d)'"))' /path/to/logs/uploader.log)
 
 if [ -n "$INFECTED" ]; then
     echo "$INFECTED" | mail -s "Infected Files Detected" admin@example.com
@@ -409,7 +409,7 @@ Use webhook to send scan results:
 #!/bin/bash
 WEBHOOK_URL="https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
 
-tail -n 1 logs/safeuploader.log | jq 'select(.scan_phase == "complete")' | while read -r line; do
+tail -n 1 logs/uploader.log | jq 'select(.scan_phase == "complete")' | while read -r line; do
     RESULT=$(echo "$line" | jq -r '.scan_result')
     FILE=$(echo "$line" | jq -r '.uploaded_file')
     

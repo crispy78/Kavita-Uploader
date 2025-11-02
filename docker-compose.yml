@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  kavita-safeuploader:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kavita-safeuploader
+    ports:
+      - "5050:5050"
+    volumes:
+      # Persistent data volumes
+      - ./quarantine:/app/quarantine
+      - ./unsorted:/app/unsorted
+      - ./library:/app/library
+      - ./logs:/app/logs
+      - ./config.yaml:/app/config.yaml:ro
+      - ./safeuploader.db:/app/safeuploader.db
+    environment:
+      # Override config via environment variables
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=5050
+      - FOLDERS_QUARANTINE=/app/quarantine
+      - FOLDERS_UNSORTED=/app/unsorted
+      - FOLDERS_LIBRARY=/app/library
+      - LOGGING_LEVEL=INFO
+      # Add your VirusTotal API key here (Step 2)
+      # - SCANNING_VIRUSTOTAL_API_KEY=your_key_here
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5050/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    networks:
+      - kavita-network
+
+networks:
+  kavita-network:
+    driver: bridge
+
+# Optional: If you want to integrate with existing Kavita container
+# Uncomment and adjust the Kavita service configuration
+#
+# services:
+#   kavita:
+#     image: kizaing/kavita:latest
+#     container_name: kavita
+#     ports:
+#       - "5000:5000"
+#     volumes:
+#       - ./library:/library
+#       - kavita-data:/kavita/config
+#     networks:
+#       - kavita-network
+#
+# volumes:
+#   kavita-data:
+
+

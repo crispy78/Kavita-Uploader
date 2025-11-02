@@ -1,0 +1,13 @@
+{"timestamp": "2025-10-28T19:06:53.350840Z", "level": "INFO", "logger": "safeuploader", "message": "Serving frontend from /tmp/Kavita-upload/frontend/dist", "module": "main", "function": "<module>"}
+{"timestamp": "2025-10-28T19:06:53.351852Z", "level": "INFO", "logger": "safeuploader", "message": "Starting Kavita SafeUploader...", "module": "main", "function": "lifespan"}
+{"timestamp": "2025-10-28T19:06:53.356070Z", "level": "INFO", "logger": "safeuploader", "message": "Database initialized", "module": "main", "function": "lifespan"}
+{"timestamp": "2025-10-28T19:06:53.356617Z", "level": "INFO", "logger": "safeuploader", "message": "Server starting on 0.0.0.0:5050", "module": "main", "function": "lifespan"}
+{"timestamp": "2025-10-28T19:07:06.767236Z", "level": "INFO", "logger": "safeuploader", "message": "GET /", "module": "main", "function": "log_requests", "ip_address": "10.25.10.213"}
+{"timestamp": "2025-10-28T19:07:06.781367Z", "level": "INFO", "logger": "safeuploader", "message": "GET /assets/index-Crq7MyaS.js", "module": "main", "function": "log_requests", "ip_address": "10.25.10.213"}
+{"timestamp": "2025-10-28T19:07:06.781771Z", "level": "INFO", "logger": "safeuploader", "message": "GET /assets/react-vendor-nf7bT_Uh.js", "module": "main", "function": "log_requests", "ip_address": "10.25.10.213"}
+{"timestamp": "2025-10-28T19:07:06.783953Z", "level": "INFO", "logger": "safeuploader", "message": "GET /assets/index-Cr1BtszN.css", "module": "main", "function": "log_requests", "ip_address": "10.25.10.213"}
+{"timestamp": "2025-10-28T19:07:06.812327Z", "level": "INFO", "logger": "safeuploader", "message": "GET /api/config", "module": "main", "function": "log_requests", "ip_address": "10.25.10.213"}
+{"timestamp": "2025-10-28T19:07:06.994894Z", "level": "INFO", "logger": "safeuploader", "message": "GET /vite.svg", "module": "main", "function": "log_requests", "ip_address": "10.25.10.213"}
+{"timestamp": "2025-10-28T19:07:11.084400Z", "level": "INFO", "logger": "safeuploader", "message": "POST /api/upload", "module": "main", "function": "log_requests", "ip_address": "10.25.10.213"}
+{"timestamp": "2025-10-28T19:07:11.134874Z", "level": "INFO", "logger": "safeuploader", "message": "File quarantined successfully", "module": "services", "function": "save_to_quarantine", "upload_uuid": "ad97e22b-6b92-43cd-865d-727bcb938d3a", "uploaded_file": "100_SIEM_Rules.pdf", "file_size": 508149, "status": "quarantined"}
+{"timestamp": "2025-10-28T19:07:11.135140Z", "level": "INFO", "logger": "safeuploader", "message": "File uploaded successfully", "module": "routes", "function": "upload_file", "upload_uuid": "ad97e22b-6b92-43cd-865d-727bcb938d3a", "uploaded_file": "100_SIEM_Rules.pdf", "file_size": 508149, "ip_address": "10.25.10.213"}

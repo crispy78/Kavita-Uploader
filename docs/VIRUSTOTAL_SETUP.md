@@ -1,11 +1,11 @@
 # VirusTotal Setup Guide
 
-Complete guide to configuring VirusTotal scanning for Kavita SafeUploader.
+Complete guide to configuring VirusTotal scanning for Kavita Uploader.
 
 ## 📋 Prerequisites
 
 - Ubuntu 24.04 LTS
-- Kavita SafeUploader installed
+- Kavita Uploader installed
 - Internet connection
 
 ## 🔑 Getting a VirusTotal API Key
@@ -102,7 +102,7 @@ export SCANNING_VIRUSTOTAL_API_KEY="your_key_here"
 Add to systemd service:
 
 ```bash
-sudo nano /etc/systemd/system/kavita-safeuploader.service
+sudo nano /etc/systemd/system/kavita-uploader.service
 ```
 
 Add under `[Service]`:
@@ -114,7 +114,7 @@ Environment="SCANNING_VIRUSTOTAL_API_KEY=your_key_here"
 Reload and restart:
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl restart kavita-safeuploader
+sudo systemctl restart kavita-uploader
 ```
 
 ## 🧪 Testing Your Setup
@@ -148,7 +148,7 @@ print('API Key Valid!' if result[0] else 'API Key Invalid or Network Error')
 
 ```bash
 # View scan logs
-tail -f logs/safeuploader.log | jq 'select(.message | contains("Scan"))'
+tail -f logs/uploader.log | jq 'select(.message | contains("Scan"))'
 
 # View specific scan result
 cat logs/scans/<upload-uuid>.json | jq .
@@ -332,11 +332,11 @@ VirusTotal connections use HTTPS:
 2. **Local Logs:**
 ```bash
 # Count scans today
-grep "File uploaded to VirusTotal" logs/safeuploader.log | \
+grep "File uploaded to VirusTotal" logs/uploader.log | \
   grep "$(date +%Y-%m-%d)" | wc -l
 
 # Count hash reuses (saved requests)
-grep "Using existing VirusTotal report" logs/safeuploader.log | wc -l
+grep "Using existing VirusTotal report" logs/uploader.log | wc -l
 ```
 
 ### Estimate Monthly Usage
@@ -391,8 +391,8 @@ export SCANNING_ENABLED=false
 - Community: https://support.virustotal.com
 - Premium support: support@virustotal.com
 
-### SafeUploader Issues
-- Check logs: `logs/safeuploader.log`
+### Uploader Issues
+- Check logs: `logs/uploader.log`
 - API docs: http://your-server:5050/docs
 - GitHub Issues: [your-repo]/issues
 

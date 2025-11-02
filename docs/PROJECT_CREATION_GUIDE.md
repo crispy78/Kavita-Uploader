@@ -1,4 +1,4 @@
-# Project Creation Guide: Kavita SafeUploader
+# Project Creation Guide: Kavita Uploader
 
 **How This Project Was Built - A Guide for Vibe-Coding Projects**
 
@@ -40,7 +40,7 @@
 
 **Key Libraries:**
 ```python
-fastapi==0.115.5          # Web framework
+fastapi==0.120.4          # Web framework (requires Python 3.12+)
 uvicorn==0.32.1           # ASGI server
 sqlalchemy==2.0.36        # ORM with async support
 aiosqlite==0.20.0         # Async SQLite driver
@@ -61,7 +61,7 @@ Pillow==11.0.0            # Image processing
 
 **Key Libraries:**
 ```json
-"react": "^18.3.1"
+"react": "^19.2.0"
 "vite": "^5.4.11"
 "axios": "^1.7.8"
 "tailwindcss": "^3.4.17"

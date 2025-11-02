@@ -11,7 +11,6 @@ Everything you need to install, operate, secure, and extend Kavita Uploader.
 - DEVELOPMENT.md — Local dev workflow (backend/frontend), project structure, conventions, and adding new features.
 - VIRUSTOTAL_SETUP.md — How to configure VirusTotal API and enable scanning; quota/rate‑limit notes.
 - PROJECT_CREATION_GUIDE.md — How this project was built (vibe‑coding friendly), architecture decisions, and replication guide.
-- CLEANUP_SUMMARY.md — What was removed/consolidated and why (historical reference).
 
 Notes
 - All docs are Markdown and live in this docs/ folder.

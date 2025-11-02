@@ -7,6 +7,8 @@ export default function UploadStatus({ uploadInfo }) {
   const [details, setDetails] = useState(null)
   const [loading, setLoading] = useState(false)
   const [showMetadataModal, setShowMetadataModal] = useState(false)
+  const [savingMetadata, setSavingMetadata] = useState(false)
+  const [movingFile, setMovingFile] = useState(false)
 
   // Load details on mount since expanded by default
   useEffect(() => {
@@ -57,14 +59,19 @@ export default function UploadStatus({ uploadInfo }) {
   }
 
   const handleMetadataSave = async (metadata) => {
-    // Update details and then attempt publish (move)
+    // Metadata is already saved by the modal before onSave is called
+    // Update details with metadata and show moving state immediately
     setDetails(prev => ({
       ...prev,
       status: 'metadata_verified',
       metadata_json: JSON.stringify(metadata)
     }))
+    
+    // Show moving state while file is being moved
+    setMovingFile(true)
 
     try {
+      // Attempt publish (move) - this is the actual async operation that takes time
       const moveResult = await moveToUnsorted(uploadInfo.uuid)
       if (moveResult?.success) {
         setDetails(prev => ({
@@ -72,8 +79,23 @@ export default function UploadStatus({ uploadInfo }) {
           status: 'moved',
           final_path: moveResult.destination || prev?.final_path
         }))
+      } else {
+        // If move failed but metadata was saved, keep status as metadata_verified
+        setDetails(prev => ({
+          ...prev,
+          status: 'metadata_verified'
+        }))
       }
-    } catch {}
+    } catch (error) {
+      console.error('Failed to move file:', error)
+      // If error occurred, keep status as metadata_verified
+      setDetails(prev => ({
+        ...prev,
+        status: 'metadata_verified'
+      }))
+    } finally {
+      setMovingFile(false)
+    }
   }
 
   const getStatusColor = (status) => {
@@ -104,6 +126,24 @@ export default function UploadStatus({ uploadInfo }) {
         <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-300 border-t-blue-600"></div>
       </div>
       <span className="text-sm">Scanning for viruses and malware…</span>
+    </div>
+  )
+
+  const getSavingIndicator = () => (
+    <div className="flex items-center space-x-3 text-purple-600">
+      <div className="relative h-5 w-5">
+        <div className="animate-spin rounded-full h-5 w-5 border-2 border-purple-300 border-t-purple-600"></div>
+      </div>
+      <span className="text-sm">Saving metadata…</span>
+    </div>
+  )
+
+  const getMovingIndicator = () => (
+    <div className="flex items-center space-x-3 text-emerald-600">
+      <div className="relative h-5 w-5">
+        <div className="animate-spin rounded-full h-5 w-5 border-2 border-emerald-300 border-t-emerald-600"></div>
+      </div>
+      <span className="text-sm">Moving file to library…</span>
     </div>
   )
 
@@ -220,14 +260,28 @@ export default function UploadStatus({ uploadInfo }) {
                 </div>
               )}
 
-              {/* Show metadata status if verified */}
-              {(details.status === 'metadata_verified' || details.status === 'moved') && (
+              {/* Show saving metadata indicator */}
+              {savingMetadata && (
+                <div className="pt-3 border-t border-gray-200">
+                  {getSavingIndicator()}
+                </div>
+              )}
+
+              {/* Show moving file indicator */}
+              {movingFile && (
+                <div className="pt-3 border-t border-gray-200">
+                  {getMovingIndicator()}
+                </div>
+              )}
+
+              {/* Show metadata status if verified (but not if currently saving/moving) */}
+              {!savingMetadata && !movingFile && (details.status === 'metadata_verified' || details.status === 'moved') && (
                 <div className="pt-3 border-t border-gray-200">
                   <div className="flex items-center space-x-2 text-green-600">
                     <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
-                    <span className="text-sm font-medium">Metadata verified - Ready for Step 4</span>
+                    <span className="text-sm font-medium">Metadata verified</span>
                   </div>
                 </div>
               )}

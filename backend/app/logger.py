@@ -119,7 +119,7 @@ class TextFormatter(logging.Formatter):
 def setup_logger(
     name: str,
     log_level: str = "INFO",
-    log_file: str = "logs/safeuploader.log",
+    log_file: str = "logs/uploader.log",
     max_bytes: int = 10485760,
     backup_count: int = 5,
     log_format: str = "json",
@@ -182,10 +182,10 @@ def get_scan_logger() -> logging.Logger:
     Returns:
         Logger configured for scan tracking
     """
-    return logging.getLogger("safeuploader.scan")
+    return logging.getLogger("uploader.scan")
 
 
 # Create default loggers
-app_logger = setup_logger("safeuploader")
+app_logger = setup_logger("uploader")
 scan_logger = get_scan_logger()
 

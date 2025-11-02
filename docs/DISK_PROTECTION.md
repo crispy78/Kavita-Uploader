@@ -573,7 +573,7 @@ Log: EMERGENCY CLEANUP TRIGGERED - Disk critically low
 
 2. **Review logs for patterns:**
    ```bash
-   grep "emergency_cleanup" logs/safeuploader.log
+   grep "emergency_cleanup" logs/uploader.log
    ```
 
 3. **Identify space hogs:**
@@ -611,12 +611,12 @@ Log: EMERGENCY CLEANUP TRIGGERED - Disk critically low
 
 2. **Check logs for errors:**
    ```bash
-   grep "disk_protection\|DiskMonitor" logs/safeuploader.log
+   grep "disk_protection\|DiskMonitor" logs/uploader.log
    ```
 
 3. **Restart service:**
    ```bash
-   sudo systemctl restart kavita-safeuploader
+   sudo systemctl restart kavita-uploader
    ```
 
 ---

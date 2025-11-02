@@ -21,9 +21,9 @@ class ServerConfig(BaseSettings):
 
 class FoldersConfig(BaseSettings):
     """Folder paths configuration."""
-    quarantine: str = Field(default="./quarantine")
-    unsorted: str = Field(default="./unsorted")
-    library: str = Field(default="./library")
+    quarantine: str = Field(default="../ebooks/quarantine")
+    unsorted: str = Field(default="../ebooks/unsorted")
+    library: str = Field(default="../ebooks/library")
 
     model_config = SettingsConfigDict(env_prefix="FOLDERS_")
 
@@ -133,8 +133,8 @@ class NotificationSettings(BaseModel):
 class MovingConfig(BaseSettings):
     """Moving configuration (Step 4)."""
     enabled: bool = Field(default=True)
-    unsorted_dir: str = Field(default="./unsorted")
-    kavita_library_dirs: List[str] = Field(default_factory=lambda: ["./library"])
+    unsorted_dir: str = Field(default="../ebooks/unsorted")
+    kavita_library_dirs: List[str] = Field(default_factory=lambda: ["../ebooks/library"])
     rename_on_name_conflict: bool = Field(default=True)
     rename_pattern: str = Field(default="{title} - {author} (duplicate_{timestamp}){ext}")
     discard_on_exact_duplicate: bool = Field(default=True)
@@ -173,7 +173,7 @@ class LoggingConfig(BaseSettings):
     format: str = Field(default="json")
     console_format: str = Field(default="text")
     console_level: str = Field(default="INFO")
-    file: str = Field(default="logs/safeuploader.log")
+    file: str = Field(default="logs/uploader.log")
     max_bytes: int = Field(default=10485760)
     backup_count: int = Field(default=5)
 
@@ -190,6 +190,28 @@ class ApiProtectionConfig(BaseSettings):
     allow_docs_in_debug: bool = Field(default=True)
 
     model_config = SettingsConfigDict(env_prefix="API_PROTECTION_")
+
+
+class KavitaConfig(BaseSettings):
+    """Kavita server configuration for authentication."""
+    enabled: bool = Field(default=False)  # Enable to require Kavita login
+    server_url: str = Field(default="http://localhost:5000")  # Kavita server URL
+    api_key: str = Field(default="")  # Optional: Kavita API key (if using API key auth)
+    use_api_key: bool = Field(default=False)  # Use API key instead of username/password
+    verify_ssl: bool = Field(default=True)  # Verify SSL certificates
+    timeout: int = Field(default=10)  # Request timeout in seconds
+
+    model_config = SettingsConfigDict(env_prefix="KAVITA_")
+
+
+class AuthConfig(BaseSettings):
+    """Authentication configuration."""
+    require_auth: bool = Field(default=False)  # Require authentication for uploads
+    session_secret: str = Field(default="INSECURE-CHANGE-THIS")  # Secret for JWT tokens
+    token_expiry_hours: int = Field(default=24)  # Token expiry in hours
+    cookie_name: str = Field(default="kavita_uploader_token")  # Cookie name for token
+
+    model_config = SettingsConfigDict(env_prefix="AUTH_")
 
 
 class Config:
@@ -240,6 +262,8 @@ class Config:
         self.disk_protection = DiskProtectionConfig(**self._yaml_config.get("disk_protection", {}))
         self.logging = LoggingConfig(**self._yaml_config.get("logging", {}))
         self.api_protection = ApiProtectionConfig(**self._yaml_config.get("api_protection", {}))
+        self.kavita = KavitaConfig(**self._yaml_config.get("kavita", {}))
+        self.auth = AuthConfig(**self._yaml_config.get("auth", {}))
 
     def ensure_directories(self):
         """Create necessary directories with secure permissions."""

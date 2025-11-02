@@ -1,4 +1,4 @@
-# Kavita SafeUploader - Installation Notes
+# Kavita Uploader - Installation Notes
 
 ## ✅ Clean Install Checklist
 
@@ -22,7 +22,7 @@ chmod +x install.sh
 ```
 
 The installer will:
-1. ✅ Install system dependencies (Python 3.12, Node.js 20, libmagic, unzip, unrar)
+1. ✅ Install system dependencies (Python 3.12+ auto-detected, Node.js 20, libmagic, unzip, unrar)
 2. ✅ Create Python virtual environment
 3. ✅ Install Python dependencies (including PyMuPDF, ebooklib, Pillow)
 4. ✅ Install Node.js dependencies
@@ -104,7 +104,7 @@ The database will **auto-migrate** on server start. If it doesn't:
 2. Backup old database:
    ```bash
    cd backend
-   mv safeuploader.db safeuploader.db.backup
+   mv uploader.db uploader.db.backup
    ```
 3. Restart server (creates fresh database)
 
@@ -154,8 +154,8 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 5050
 
 **Production (systemd):**
 ```bash
-sudo systemctl start kavita-safeuploader
-sudo systemctl enable kavita-safeuploader
+sudo systemctl start kavita-uploader
+sudo systemctl enable kavita-uploader
 ```
 
 ### File Locations
@@ -163,11 +163,11 @@ sudo systemctl enable kavita-safeuploader
 ```
 Kavita-Upload/
 ├── backend/
-│   ├── safeuploader.db          # SQLite database (auto-created/migrated)
+│   ├── uploader.db          # SQLite database (auto-created/migrated)
 │   ├── quarantine/              # Uploaded files (700 permissions)
 │   ├── unsorted/                # Step 4 destination
 │   ├── logs/                    # Application logs
-│   │   ├── safeuploader.log    # Main log
+│   │   ├── uploader.log    # Main log
 │   │   ├── files/              # Per-upload logs
 │   │   └── scans/              # Scan result JSON
 │   └── previews/                # Temporary preview cache (auto-cleanup)
@@ -219,14 +219,14 @@ If you encounter issues not covered here:
 1. **Check logs:**
    ```bash
    # Application logs
-   tail -f backend/logs/safeuploader.log
+   tail -f backend/logs/uploader.log
    
    # Per-file logs
    ls -lt backend/logs/files/
    tail backend/logs/files/YYYYMMDD_HHMMSS_uuid.log
    
    # Systemd logs (if using service)
-   journalctl -u kavita-safeuploader -f
+   journalctl -u kavita-uploader -f
    ```
 
 2. **Check configuration:**

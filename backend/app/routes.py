@@ -1,6 +1,6 @@
 """API routes for upload and processing."""
 
-from typing import List
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 from fastapi import (
     APIRouter,
@@ -51,6 +51,65 @@ router = APIRouter(dependencies=[Depends(verify_ui_header)])
 limiter = Limiter(key_func=get_remote_address)
 
 
+async def get_current_user(request: Request) -> Optional[Dict[str, Any]]:
+    """Dependency to get current authenticated user.
+    
+    Returns user data if authenticated, None otherwise.
+    Does not raise exception - allows optional auth.
+    """
+    from app.kavita_auth import kavita_auth
+    
+    if not config.kavita.enabled:
+        return None
+    
+    # Debug logging
+    app_logger.debug(
+        f"get_current_user called",
+        extra={
+            "kavita_enabled": config.kavita.enabled,
+            "cookie_name": config.auth.cookie_name,
+            "cookies_received": list(request.cookies.keys()),
+            "has_auth_cookie": config.auth.cookie_name in request.cookies,
+        }
+    )
+    
+    user = kavita_auth.get_current_user(request)
+    
+    app_logger.debug(
+        f"get_current_user result",
+        extra={
+            "user_found": user is not None,
+            "username": user.get("username") if user else None,
+        }
+    )
+    
+    return user
+
+
+async def require_auth(request: Request) -> Dict[str, Any]:
+    """Dependency that requires authentication.
+    
+    Raises HTTPException if user is not authenticated.
+    """
+    from app.kavita_auth import kavita_auth
+    
+    if not config.kavita.enabled or not config.auth.require_auth:
+        return {"username": "anonymous"}
+    
+    user = kavita_auth.get_current_user(request)
+    
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "error": "Authentication required",
+                "message": "Please log in to upload files"
+            }
+        )
+    
+    return user
+
+
 async def get_db_session():
     """Dependency for database session."""
     async for session in db.get_session():
@@ -80,6 +139,157 @@ async def get_config():
             "scanning_enabled": config.scanning.enabled,
             "metadata_extraction_enabled": config.metadata.extract_on_upload,
             "duplicate_detection_enabled": config.duplicate_detection.enabled,
+        },
+        "auth": {
+            "kavita_enabled": config.kavita.enabled,
+            "require_auth": config.auth.require_auth,
+        }
+    }
+
+
+# Authentication endpoints
+@router.post("/auth/login")
+async def login(
+    request: Request,
+):
+    """Login with Kavita credentials.
+    
+    Expects JSON body with:
+    - username: Kavita username
+    - password: Kavita password
+    
+    Returns:
+        Session token and user information
+    """
+    from app.kavita_auth import kavita_auth
+    
+    if not config.kavita.enabled:
+        raise HTTPException(
+            status_code=400,
+            detail="Kavita authentication is not enabled"
+        )
+    
+    try:
+        # Get JSON body
+        body = await request.json()
+        username = body.get("username")
+        password = body.get("password")
+        
+        if not username or not password:
+            raise HTTPException(
+                status_code=400,
+                detail="Username and password are required"
+            )
+        
+        # Username/password authentication
+        user_data = await kavita_auth.authenticate_with_kavita(username, password)
+        
+        # Create session token
+        token = kavita_auth.create_session_token(user_data["username"], user_data)
+        
+        app_logger.info(
+            f"User logged in successfully",
+            extra={"username": user_data["username"]}
+        )
+        
+        # Create response with cookie
+        response = JSONResponse({
+            "success": True,
+            "message": "Login successful",
+            "user": {
+                "username": user_data["username"],
+                "email": user_data.get("email"),
+                "roles": user_data.get("roles", [])
+            }
+        })
+        
+        # Set secure cookie
+        # Only use secure=True if we're actually using HTTPS (not just in production)
+        # Check if request is HTTPS by looking for X-Forwarded-Proto header (for reverse proxies)
+        # or checking the request URL scheme
+        is_https = (
+            request.url.scheme == "https" or
+            request.headers.get("X-Forwarded-Proto") == "https"
+        )
+        
+        max_age = config.auth.token_expiry_hours * 3600
+        response.set_cookie(
+            key=config.auth.cookie_name,
+            value=token,
+            max_age=max_age,
+            httponly=True,
+            secure=is_https,  # Only use secure cookies over HTTPS
+            samesite="lax"
+        )
+        
+        app_logger.debug(
+            f"Cookie set",
+            extra={
+                "cookie_name": config.auth.cookie_name,
+                "secure": is_https,
+                "scheme": request.url.scheme,
+                "x_forwarded_proto": request.headers.get("X-Forwarded-Proto"),
+            }
+        )
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        app_logger.error(
+            f"Login failed: {str(e)}",
+            exc_info=True
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Login failed: {str(e)}"
+        )
+
+
+@router.post("/auth/logout")
+async def logout():
+    """Logout and clear session.
+    
+    Returns:
+        Success message
+    """
+    response = JSONResponse({
+        "success": True,
+        "message": "Logged out successfully"
+    })
+    
+    # Clear cookie
+    response.delete_cookie(
+        key=config.auth.cookie_name,
+        httponly=True,
+        samesite="lax"
+    )
+    
+    return response
+
+
+@router.get("/auth/me")
+async def get_current_session(
+    user: Optional[Dict[str, Any]] = Depends(get_current_user)
+):
+    """Get current authenticated user session.
+    
+    Returns:
+        Current user information or None if not authenticated
+    """
+    if not user:
+        return {
+            "authenticated": False,
+            "message": "Not authenticated"
+        }
+    
+    return {
+        "authenticated": True,
+        "user": {
+            "username": user.get("username"),
+            "email": user.get("email"),
+            "roles": user.get("roles", [])
         }
     }
 
@@ -90,8 +300,11 @@ async def upload_file(
     request: Request,
     file: UploadFile = File(...),
     db_session: AsyncSession = Depends(get_db_session),
+    user: Optional[Dict[str, Any]] = Depends(get_current_user),
 ):
     """Upload file to quarantine (Step 1).
+    
+    Debug logging for authentication:
     
     This endpoint implements the complete Step 1 functionality:
     - Validates file size and extension
@@ -258,11 +471,40 @@ async def upload_file(
                     }
                 )
         
+        # Get username for tracking (if authenticated)
+        username = None
+        if user:
+            username = user.get("username")
+        
+        # Debug logging for authentication issues
+        app_logger.debug(
+            f"Upload authentication check",
+            extra={
+                "kavita_enabled": config.kavita.enabled,
+                "require_auth": config.auth.require_auth,
+                "user": username,
+                "has_user_object": user is not None,
+                "cookies": list(request.cookies.keys()),
+                "cookie_name": config.auth.cookie_name,
+            }
+        )
+        
+        # Check if authentication is required
+        if config.kavita.enabled and config.auth.require_auth and not username:
+            raise HTTPException(
+                status_code=401,
+                detail={
+                    "error": "Authentication required",
+                    "message": "Please log in to upload files"
+                }
+            )
+        
         # Save to quarantine
         upload = await UploadService.save_to_quarantine(
             file_content=file_content,
             original_filename=file.filename,
             db_session=db_session,
+            uploaded_by=username,
         )
         
         app_logger.info(
@@ -271,6 +513,7 @@ async def upload_file(
                 "upload_uuid": upload.uuid,
                 "uploaded_file": file.filename,
                 "file_size": file_size,
+                "uploaded_by": username or "anonymous",
                 "ip_address": request.client.host if request.client else "unknown"
             }
         )
@@ -320,9 +563,9 @@ async def upload_file(
             next_steps.append("Scanning disabled - configure VirusTotal API key")
         
         if config.metadata.extract_on_upload:
-            next_steps.append("Metadata extraction (Step 3 - not yet implemented)")
+            next_steps.append("Metadata extraction")
         
-        next_steps.append("Duplicate check and move (Step 4 - not yet implemented)")
+        next_steps.append("Duplicate check and move")
         
         return JSONResponse(
             status_code=201,

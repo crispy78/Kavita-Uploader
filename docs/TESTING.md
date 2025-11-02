@@ -1,4 +1,4 @@
-# Testing Guide - Kavita SafeUploader
+# Testing Guide - Kavita Uploader
 
 Quick guide to test the application after installation.
 
@@ -73,7 +73,7 @@ cat "logs/files/*_${UUID:0:8}.log"
 **In Console (real-time):**
 ```bash
 # Watch the main log
-tail -f logs/safeuploader.log | jq -C '.'
+tail -f logs/uploader.log | jq -C '.'
 ```
 
 You should see scan phases:
@@ -181,7 +181,7 @@ grep "virustotal_api_key" config.yaml | head -c 50
 **Check poll attempts:**
 ```bash
 # Search logs for polling
-jq 'select(.scan_phase == "poll")' logs/safeuploader.log
+jq 'select(.scan_phase == "poll")' logs/uploader.log
 ```
 
 **Manual scan status check:**
@@ -234,7 +234,7 @@ done
 ### Check Average Scan Duration
 
 ```bash
-jq 'select(.scan_phase == "poll" and .attempt == 1) | .timestamp' logs/safeuploader.log
+jq 'select(.scan_phase == "poll" and .attempt == 1) | .timestamp' logs/uploader.log
 ```
 
 ## 🧪 Automated Test Suite
@@ -268,7 +268,7 @@ scanning:
   virustotal_api_key: "your-actual-key-here"
 
 # Restart
-sudo systemctl restart kavita-safeuploader
+sudo systemctl restart kavita-uploader
 ```
 
 ### 2. Permissions Error on Logs
@@ -285,13 +285,13 @@ chmod 755 logs logs/files logs/scans
 **Fix:**
 ```bash
 # Stop service
-sudo systemctl stop kavita-safeuploader
+sudo systemctl stop kavita-uploader
 
 # Remove lock
 rm -f data/uploads.db-wal data/uploads.db-shm
 
 # Restart
-sudo systemctl start kavita-safeuploader
+sudo systemctl start kavita-uploader
 ```
 
 ## 📝 Test Data
@@ -323,7 +323,7 @@ After installation, verify:
 - [ ] Files upload successfully
 - [ ] Per-file logs created in `logs/files/`
 - [ ] Console shows colored scan progress
-- [ ] JSON logs in `logs/safeuploader.log`
+- [ ] JSON logs in `logs/uploader.log`
 - [ ] Scans complete within 2-3 minutes
 - [ ] Clean files marked as "safe"
 - [ ] Status API returns correct information
@@ -341,10 +341,10 @@ After installation, verify:
 **Need Help?** Check logs first:
 ```bash
 # Application logs
-tail -100 logs/safeuploader.log | jq '.'
+tail -100 logs/uploader.log | jq '.'
 
 # System logs
-journalctl -u kavita-safeuploader -n 100
+journalctl -u kavita-uploader -n 100
 
 # Per-file logs
 ls -lt logs/files/ | head -5

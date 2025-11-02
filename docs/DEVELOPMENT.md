@@ -5,7 +5,7 @@
 ### Prerequisites
 
 - Ubuntu 24.04 LTS (or similar Linux distribution)
-- Python 3.12+
+- Python 3.12+ (installer auto-detects: tries 3.13, falls back to 3.12, then system default)
 - Node.js 18+ (20 LTS recommended)
 - Git
 
@@ -20,7 +20,7 @@ cd Kavita-Upload
 chmod +x install.sh
 ./install.sh
 
-# Or manual setup
+# Or manual setup (using Python 3.12 - Ubuntu 24.04 default)
 cd backend
 python3.12 -m venv venv
 source venv/bin/activate
@@ -317,7 +317,7 @@ alembic upgrade head
 
 ```bash
 # SQLite CLI
-sqlite3 safeuploader.db
+sqlite3 uploader.db
 
 # Show tables
 .tables
@@ -397,16 +397,16 @@ app_logger.info(
 
 ```bash
 # Tail logs
-tail -f logs/safeuploader.log
+tail -f logs/uploader.log
 
 # Filter by level
-grep '"level":"ERROR"' logs/safeuploader.log
+grep '"level":"ERROR"' logs/uploader.log
 
 # Pretty print JSON
-tail -f logs/safeuploader.log | jq '.'
+tail -f logs/uploader.log | jq '.'
 
 # Systemd logs
-journalctl -u kavita-safeuploader -f
+journalctl -u kavita-uploader -f
 ```
 
 ## Code Style
@@ -521,7 +521,7 @@ kill -9 <PID>
 ```bash
 # Stop all running instances
 pkill -f uvicorn
-rm safeuploader.db-shm safeuploader.db-wal
+rm uploader.db-shm uploader.db-wal
 ```
 
 3. **Module not found**:
@@ -529,7 +529,7 @@ rm safeuploader.db-shm safeuploader.db-wal
 # Reinstall dependencies
 cd backend
 rm -rf venv
-python3.12 -m venv venv
+python3.12 -m venv venv  # or python3.13 if available
 source venv/bin/activate
 pip install -r requirements.txt
 ```

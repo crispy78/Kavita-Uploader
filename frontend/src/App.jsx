@@ -3,12 +3,14 @@ import UploadZone from './components/UploadZone'
 import UploadStatus from './components/UploadStatus'
 import Header from './components/Header'
 import WorkflowSteps from './components/WorkflowSteps'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { getConfig } from './services/api'
 
-function App() {
+function AppContent() {
   const [config, setConfig] = useState(null)
   const [uploadedFiles, setUploadedFiles] = useState([])
   const [loading, setLoading] = useState(true)
+  const { setAuthEnabled, setRequireAuth } = useAuth()
 
   useEffect(() => {
     loadConfig()
@@ -18,12 +20,27 @@ function App() {
     try {
       const data = await getConfig()
       setConfig(data)
+      
+      // Update auth context with config
+      if (data.auth) {
+        setAuthEnabled(data.auth.kavita_enabled || false)
+        setRequireAuth(data.auth.require_auth || false)
+      }
     } catch (error) {
       console.error('Failed to load config:', error)
     } finally {
       setLoading(false)
     }
   }
+  
+  const { checkAuth } = useAuth()
+  
+  // Re-check authentication when config loads (in case auth state changed)
+  useEffect(() => {
+    if (!loading && config?.auth?.kavita_enabled) {
+      checkAuth()
+    }
+  }, [loading, config?.auth?.kavita_enabled, checkAuth])
 
   const handleUploadComplete = (uploadInfo) => {
     setUploadedFiles(prev => [uploadInfo, ...prev])
@@ -63,6 +80,14 @@ function App() {
         </div>
       </footer>
     </div>
+  )
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   )
 }
 

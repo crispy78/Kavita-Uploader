@@ -92,27 +92,57 @@ class DuplicateDetector:
     ) -> Dict[str, Any]:
         """Check if file exists in Kavita library by hash.
         
-        TODO: Step 3/4 - Implement library folder scanning
-        This would scan the library directory and build a hash database.
+        Uses Kavita API to get library paths if available, otherwise uses config.
         
         Args:
             file_hash: SHA256 hash of file
-            library_path: Path to Kavita library (defaults to config)
+            library_path: Path to Kavita library (defaults to API or config)
             
         Returns:
             Dictionary with library duplicate status
         """
-        library_path = library_path or config.folders.library
+        # Try to get libraries from Kavita API if enabled
+        search_paths = []
         
-        # STUB: Would implement recursive directory scan and hash comparison
-        app_logger.debug(
-            f"Library duplicate check not yet implemented",
-            extra={"file_hash": file_hash, "library_path": library_path}
+        if config.kavita.enabled:
+            try:
+                from app.kavita_api import kavita_api
+                library_paths = await kavita_api.get_library_paths()
+                if library_paths:
+                    search_paths = library_paths
+            except Exception as e:
+                app_logger.debug(
+                    f"Failed to fetch libraries from API, using config",
+                    extra={"error": str(e)}
+                )
+        
+        # Fallback to config if API not available
+        if not search_paths:
+            if library_path:
+                search_paths = [library_path]
+            else:
+                # Use config libraries
+                search_paths = config.moving.kavita_library_dirs if hasattr(config.moving, 'kavita_library_dirs') else []
+                if config.folders.library:
+                    search_paths.append(config.folders.library)
+        
+        if not search_paths:
+            return {
+                "in_library": False,
+                "reason": "no_libraries_configured"
+            }
+        
+        # Check each library path for duplicates
+        from app.mover_service import MoverService
+        is_duplicate, duplicate_path = await MoverService.check_duplicates_in_filesystem(
+            file_hash,
+            search_paths
         )
         
         return {
-            "in_library": False,
-            "reason": "not_implemented"
+            "in_library": is_duplicate,
+            "reason": "hash_match" if is_duplicate else "not_found",
+            "duplicate_path": duplicate_path if is_duplicate else None
         }
     
     @staticmethod

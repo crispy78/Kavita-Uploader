@@ -30,6 +30,7 @@ class UploadService:
         file_content: bytes,
         original_filename: str,
         db_session: AsyncSession,
+        uploaded_by: Optional[str] = None,
     ) -> Upload:
         """Save uploaded file to quarantine with UUID name.
         
@@ -86,6 +87,7 @@ class UploadService:
                 quarantine_path=str(quarantine_path),
                 file_hash_sha256=file_hash,
                 uploaded_at=datetime.utcnow(),
+                uploaded_by=uploaded_by,  # Store username for traceability
             )
             
             db_session.add(upload)
@@ -99,6 +101,7 @@ class UploadService:
                     "uploaded_file": original_filename,
                     "file_size": file_size,
                     "status": "quarantined",
+                    "uploaded_by": uploaded_by or "anonymous",
                 }
             )
             

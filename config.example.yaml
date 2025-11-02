@@ -1,4 +1,4 @@
-# Kavita SafeUploader Configuration
+# Kavita Uploader Configuration
 # Copy this file to config.yaml and customize for your installation
 
 server:
@@ -11,9 +11,9 @@ server:
   secret_key: "CHANGE-THIS-TO-A-RANDOM-SECRET-KEY"  # Generate with: openssl rand -hex 32
 
 folders:
-  quarantine: "./quarantine"
-  unsorted: "./unsorted"
-  library: "./library"  # Path to Kavita library for duplicate checking
+  quarantine: "../ebooks/quarantine"  # Relative to backend/ directory (resolves to {install_dir}/ebooks/quarantine)
+  unsorted: "../ebooks/unsorted"  # Relative to backend/ directory (resolves to {install_dir}/ebooks/unsorted)
+  library: "../ebooks/library"  # Path to Kavita library for duplicate checking (relative to backend/)
 
 upload:
   max_file_size_mb: 25
@@ -88,9 +88,13 @@ preview:
 
 moving:
   enabled: true  # Step 4: Enable moving files from quarantine to library
-  unsorted_dir: "./unsorted"  # Destination for new files
-  kavita_library_dirs:  # Additional library paths to check for duplicates
-    - "./library"
+  unsorted_dir: "../ebooks/unsorted"  # Destination base folder (relative to backend/)
+  # NOTE: Files are actually saved to {unsorted_dir}/processed/ for Kavita compatibility
+  # In Kavita, configure library to scan: {unsorted_dir} (NOT the processed subfolder)
+  # Kavita will automatically scan all subfolders including processed/
+  kavita_library_dirs:  # Fallback library paths (only used if Kavita API is disabled or unavailable)
+    - "../ebooks/library"  # Relative to backend/ directory
+    # Note: If kavita.enabled is true, libraries will be automatically fetched from Kavita API
   rename_on_name_conflict: true  # Rename files with same title/author but different hash
   rename_pattern: "{title} - {author} (duplicate_{timestamp}){ext}"
   discard_on_exact_duplicate: true  # Discard files with exact hash match
@@ -125,7 +129,7 @@ logging:
   format: "json"  # Format for log file (always JSON for parsing)
   console_format: "text"  # Format for console output: "text" (readable) or "json"
   console_level: "INFO"  # Console can have different level than file
-  file: "logs/safeuploader.log"
+  file: "logs/uploader.log"
   max_bytes: 10485760  # 10MB
   backup_count: 5
 
@@ -136,6 +140,20 @@ api_protection:
   header_value: "1"
   disable_docs: true
   allow_docs_in_debug: true
+
+kavita:
+  enabled: false  # Set to true to enable Kavita authentication
+  server_url: "http://localhost:5000"  # Your Kavita server URL
+  api_key: ""  # Optional: Kavita API key (if using API key auth instead of username/password)
+  use_api_key: false  # Set to true to use API key authentication
+  verify_ssl: true  # Verify SSL certificates (set to false for self-signed certs)
+  timeout: 10  # Request timeout in seconds
+
+auth:
+  require_auth: false  # Set to true to require login for uploads (requires kavita.enabled: true)
+  session_secret: "CHANGE-THIS-TO-A-RANDOM-SECRET-KEY"  # Generate with: openssl rand -hex 32
+  token_expiry_hours: 24  # Token expiry in hours
+  cookie_name: "kavita_uploader_token"  # Cookie name for authentication token
   
   # Module-specific logging levels
   modules:

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Kavita SafeUploader - Development Runner Script
+# Kavita Uploader - Development Runner Script
 
 set -e
 
@@ -10,7 +10,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 echo -e "${BLUE}╔════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║  Kavita SafeUploader - Dev Runner     ║${NC}"
+echo -e "${BLUE}║  Kavita Uploader - Dev Runner     ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -93,6 +93,7 @@ case "${1:-dev}" in
         exit 1
         ;;
 esac
+
 
 
 

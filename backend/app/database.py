@@ -2,12 +2,47 @@
 
 from datetime import datetime
 from typing import Optional
+from pathlib import Path
+import os
 from sqlalchemy import Column, Integer, String, DateTime, BigInteger, Boolean, Text, inspect
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
 from sqlalchemy import text
 
 Base = declarative_base()
+
+
+def get_database_path() -> str:
+    """Get database file path.
+    
+    Looks for database in this order:
+    1. Environment variable DATABASE_PATH
+    2. Project root (safeuploader.db)
+    3. Backend directory (uploader.db)
+    """
+    # Check environment variable first
+    if os.getenv("DATABASE_PATH"):
+        db_path = os.getenv("DATABASE_PATH")
+    else:
+        # Try project root first (parent of backend/)
+        backend_dir = Path(__file__).parent.parent  # backend/
+        project_root = backend_dir.parent  # project root
+        
+        # Check for safeuploader.db in project root (matches docker-compose)
+        project_db = project_root / "safeuploader.db"
+        if project_db.exists():
+            db_path = str(project_db)
+        else:
+            # Fallback to uploader.db in backend directory
+            db_path = str(backend_dir / "uploader.db")
+    
+    # Convert to absolute path and ensure parent directory exists
+    db_path = Path(db_path).absolute()
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Convert to SQLite URL format
+    # SQLite URLs need 3 or 4 slashes: sqlite:///path or sqlite+aiosqlite:///path
+    return f"sqlite+aiosqlite:///{db_path}"
 
 
 class Upload(Base):
@@ -54,13 +89,19 @@ class Upload(Base):
     
     # Error tracking
     error_message = Column(Text, nullable=True)
+    
+    # Authentication (user who uploaded)
+    uploaded_by = Column(String(255), nullable=True)  # Kavita username
 
 
 class Database:
     """Database connection manager."""
 
-    def __init__(self, database_url: str = "sqlite+aiosqlite:///./safeuploader.db"):
+    def __init__(self, database_url: Optional[str] = None):
         """Initialize database connection."""
+        if database_url is None:
+            database_url = get_database_path()
+        
         self.engine = create_async_engine(
             database_url,
             echo=False,
@@ -90,7 +131,7 @@ class Database:
         result = await conn.execute(text("PRAGMA table_info(uploads)"))
         existing_columns = {row[1] for row in result.fetchall()}
         
-        # Define required columns with their SQL types (Step 3 & 4 additions)
+        # Define required columns with their SQL types (Step 3 & 4 additions + auth)
         required_columns = {
             'metadata_json': 'TEXT',
             'metadata_edited': 'BOOLEAN DEFAULT 0',
@@ -99,6 +140,7 @@ class Database:
             'preview_generated': 'BOOLEAN DEFAULT 0',
             'preview_path': 'VARCHAR(500)',
             'duplicate_reason': 'VARCHAR(255)',  # Step 4
+            'uploaded_by': 'VARCHAR(255)',  # Authentication: username
         }
         
         # Add missing columns
@@ -115,12 +157,20 @@ class Database:
 
     async def init_db(self):
         """Create database tables and migrate schema."""
-        async with self.engine.begin() as conn:
-            # First, create any missing tables
-            await conn.run_sync(Base.metadata.create_all)
-            
-            # Then, add any missing columns to existing tables
-            await self._migrate_schema(conn)
+        from app.logger import app_logger
+        
+        try:
+            async with self.engine.begin() as conn:
+                # First, create any missing tables
+                await conn.run_sync(Base.metadata.create_all)
+                app_logger.info("Database tables created/verified")
+                
+                # Then, add any missing columns to existing tables
+                await self._migrate_schema(conn)
+                app_logger.info("Database schema migration completed")
+        except Exception as e:
+            app_logger.error(f"Database initialization failed: {e}", exc_info=True)
+            raise
 
     async def get_session(self) -> AsyncSession:
         """Get async database session."""

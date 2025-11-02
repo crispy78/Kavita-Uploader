@@ -360,7 +360,34 @@ class MoverService:
             }
         
         # STEP 2: Check for exact hash duplicates in filesystem
-        search_dirs = [config.moving.unsorted_dir] + config.moving.kavita_library_dirs
+        # Get library directories from Kavita API if enabled, otherwise use config
+        search_dirs = [config.moving.unsorted_dir]
+        
+        if config.kavita.enabled:
+            try:
+                from app.kavita_api import kavita_api
+                library_paths = await kavita_api.get_library_paths()
+                if library_paths:
+                    app_logger.info(
+                        f"Using {len(library_paths)} libraries from Kavita API",
+                        extra={"library_paths": library_paths}
+                    )
+                    search_dirs.extend(library_paths)
+                else:
+                    app_logger.warning(
+                        "No libraries found from Kavita API, falling back to config",
+                        extra={"config_libraries": config.moving.kavita_library_dirs}
+                    )
+                    search_dirs.extend(config.moving.kavita_library_dirs)
+            except Exception as e:
+                app_logger.warning(
+                    f"Failed to fetch libraries from Kavita API, using config fallback",
+                    extra={"error": str(e), "config_libraries": config.moving.kavita_library_dirs}
+                )
+                search_dirs.extend(config.moving.kavita_library_dirs)
+        else:
+            # Kavita not enabled, use config libraries
+            search_dirs.extend(config.moving.kavita_library_dirs)
         is_fs_duplicate, fs_duplicate_path = await MoverService.check_duplicates_in_filesystem(
             file_hash,
             search_dirs
@@ -445,7 +472,10 @@ class MoverService:
             }
         
         # STEP 4: Prepare destination directory
-        dest_dir = Path(config.moving.unsorted_dir)
+        # Kavita requires files in a subfolder (e.g., unsorted/processed/)
+        # Ensure we're using the processed subfolder
+        base_dir = Path(config.moving.unsorted_dir)
+        dest_dir = base_dir / "processed"
         dest_dir.mkdir(parents=True, exist_ok=True)
         
         # Ensure secure permissions
@@ -594,4 +624,6 @@ class MoverService:
             "renamed": renamed,
             "original_name": upload.original_filename if renamed else None
         }
+
+
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Kavita SafeUploader Installer for Ubuntu 24.04 LTS
+# Kavita Uploader Installer for Ubuntu 24.04 LTS
 # This script automates the installation and configuration process
 
 set -e  # Exit on any error
@@ -59,29 +59,65 @@ check_user() {
     fi
 }
 
+# Detect available Python version
+detect_python_version() {
+    log_info "Detecting available Python version..."
+    
+    # Try Python 3.13 first (latest stable), then 3.12, then 3.11
+    for py_version in "3.13" "3.12" "3.11"; do
+        if apt-cache show python${py_version} &>/dev/null; then
+            PYTHON_VERSION=${py_version}
+            log_success "Found Python ${PYTHON_VERSION} in repositories"
+            return 0
+        fi
+    done
+    
+    # If no specific version found, use generic python3
+    log_warning "No specific Python 3.x version found, using python3"
+    PYTHON_VERSION="3"
+    return 0
+}
+
 # Install system dependencies
 install_dependencies() {
     log_info "Installing system dependencies..."
     
     sudo apt-get update
     
+    # Detect available Python version
+    detect_python_version
+    
     # Install base dependencies (without nodejs/npm yet)
-    sudo apt-get install -y \
-        python3.12 \
-        python3.12-venv \
-        python3-pip \
-        libmagic1 \
-        curl \
-        git \
-        unzip \
-        unrar
+    # Use python3 if specific version not available
+    if [ "$PYTHON_VERSION" = "3" ]; then
+        log_info "Installing python3 and python3-venv..."
+        sudo apt-get install -y \
+            python3 \
+            python3-venv \
+            python3-pip \
+            libmagic1 \
+            curl \
+            git \
+            unzip \
+            unrar
+    else
+        log_info "Installing python${PYTHON_VERSION} and python${PYTHON_VERSION}-venv..."
+        sudo apt-get install -y \
+            python${PYTHON_VERSION} \
+            python${PYTHON_VERSION}-venv \
+            python3-pip \
+            libmagic1 \
+            curl \
+            git \
+            unzip \
+            unrar
+    fi
     
     log_success "System dependencies installed"
 }
 
 # Install Node.js LTS (if needed)
 install_nodejs() {
-    log_info "Checking Node.js version..."
     
     if command -v node &> /dev/null; then
         NODE_VERSION=$(node -v | cut -d 'v' -f 2 | cut -d '.' -f 1)
@@ -117,6 +153,13 @@ setup_python_venv() {
     
     cd backend
     
+    # Determine Python command to use
+    if [ "$PYTHON_VERSION" = "3" ]; then
+        PYTHON_CMD="python3"
+    else
+        PYTHON_CMD="python${PYTHON_VERSION}"
+    fi
+    
     # Check if venv exists and is functional
     if [ -d "venv" ]; then
         log_info "Checking existing virtual environment..."
@@ -126,12 +169,12 @@ setup_python_venv() {
         else
             log_warning "Virtual environment exists but is broken, recreating..."
             rm -rf venv
-            python3.12 -m venv venv
+            ${PYTHON_CMD} -m venv venv
             log_success "Virtual environment recreated"
         fi
     else
-        log_info "Creating virtual environment..."
-        python3.12 -m venv venv
+        log_info "Creating virtual environment with ${PYTHON_CMD}..."
+        ${PYTHON_CMD} -m venv venv
         log_success "Virtual environment created"
     fi
     
@@ -182,14 +225,19 @@ setup_frontend() {
 create_directories() {
     log_info "Creating directories..."
     
-    mkdir -p backend/quarantine
-    chmod 700 backend/quarantine
+    # Default ebooks folder structure - will be updated if user configures different paths
+    mkdir -p ebooks/quarantine
+    chmod 700 ebooks/quarantine
     
-    mkdir -p backend/unsorted
-    chmod 700 backend/unsorted
+    mkdir -p ebooks/unsorted
+    chmod 700 ebooks/unsorted
     
-    mkdir -p backend/library
-    chmod 755 backend/library
+    # Create processed subfolder for Kavita (files go here, Kavita scans parent)
+    mkdir -p ebooks/unsorted/processed
+    chmod 700 ebooks/unsorted/processed
+    
+    mkdir -p ebooks/library
+    chmod 755 ebooks/library
     
     mkdir -p backend/logs
     chmod 755 backend/logs
@@ -208,13 +256,13 @@ create_directories() {
 cleanup_old_database() {
     log_info "Checking for old database..."
     
-    if [ -f backend/safeuploader.db ]; then
-        log_warning "Found existing database from previous installation"
-        read -p "Delete old database? This will erase all upload records (files in quarantine will remain). (y/n) " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            BACKUP_NAME="backend/safeuploader.db.backup.$(date +%Y%m%d_%H%M%S)"
-            mv backend/safeuploader.db "$BACKUP_NAME"
+    if [ -f backend/uploader.db ]; then
+            log_warning "Found existing database from previous installation"
+            read -p "Delete old database? This will erase all upload records (files in quarantine will remain). (y/n) " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                BACKUP_NAME="backend/uploader.db.backup.$(date +%Y%m%d_%H%M%S)"
+                mv backend/uploader.db "$BACKUP_NAME"
             log_success "Old database backed up to: $BACKUP_NAME"
         else
             log_info "Keeping existing database (automatic migration will add new columns)"
@@ -228,6 +276,16 @@ cleanup_old_database() {
 generate_config() {
     log_info "Generating configuration..."
     
+    # Get installation directory (absolute path)
+    INSTALL_DIR=$(pwd)
+    INSTALL_DIR_ABS=$(realpath "$INSTALL_DIR" 2>/dev/null || echo "$INSTALL_DIR")
+    
+    # Default folder name for ebooks storage
+    EBOOKS_FOLDER="ebooks"
+    DEFAULT_QUARANTINE="${INSTALL_DIR_ABS}/${EBOOKS_FOLDER}/quarantine"
+    DEFAULT_UNSORTED="${INSTALL_DIR_ABS}/${EBOOKS_FOLDER}/unsorted"
+    DEFAULT_LIBRARY="${INSTALL_DIR_ABS}/${EBOOKS_FOLDER}/library"
+    
     # Generate secret key
     SECRET_KEY=$(openssl rand -hex 32)
     
@@ -239,10 +297,145 @@ generate_config() {
     read -p "Server port [5050]: " SERVER_PORT
     SERVER_PORT=${SERVER_PORT:-5050}
     
-    read -p "Path to Kavita library folder [./library]: " LIBRARY_PATH
-    LIBRARY_PATH=${LIBRARY_PATH:-./library}
+    echo ""
+    echo "Folder paths (leave empty to use defaults):"
+    echo ""
+    
+    read -p "Quarantine folder [${DEFAULT_QUARANTINE}]: " QUARANTINE_PATH
+    QUARANTINE_PATH=${QUARANTINE_PATH:-${DEFAULT_QUARANTINE}}
+    
+    read -p "Unsorted folder [${DEFAULT_UNSORTED}]: " UNSORTED_PATH
+    UNSORTED_PATH=${UNSORTED_PATH:-${DEFAULT_UNSORTED}}
+    
+    read -p "Library folder [${DEFAULT_LIBRARY}]: " LIBRARY_PATH
+    LIBRARY_PATH=${LIBRARY_PATH:-${DEFAULT_LIBRARY}}
+    
+    # Convert absolute paths to relative paths from backend/ if they're within install dir
+    # Otherwise keep as absolute
+    QUARANTINE_REL=$(INSTALL_DIR_ABS="${INSTALL_DIR_ABS}" QUARANTINE_PATH="${QUARANTINE_PATH}" python3 -c "
+import os
+from pathlib import Path
+
+try:
+    install_dir = Path(os.environ['INSTALL_DIR_ABS']).resolve()
+    backend_dir = install_dir / 'backend'
+    target_path = Path(os.environ['QUARANTINE_PATH']).resolve()
+    
+    rel_path = os.path.relpath(target_path, backend_dir)
+    
+    if not str(target_path).startswith(str(install_dir)):
+        print(os.environ['QUARANTINE_PATH'])
+    else:
+        print(rel_path)
+except Exception:
+    print(os.environ.get('QUARANTINE_PATH', '../ebooks/quarantine'))
+" 2>/dev/null || echo "../${EBOOKS_FOLDER}/quarantine")
+    
+    UNSORTED_REL=$(INSTALL_DIR_ABS="${INSTALL_DIR_ABS}" UNSORTED_PATH="${UNSORTED_PATH}" python3 -c "
+import os
+from pathlib import Path
+
+try:
+    install_dir = Path(os.environ['INSTALL_DIR_ABS']).resolve()
+    backend_dir = install_dir / 'backend'
+    target_path = Path(os.environ['UNSORTED_PATH']).resolve()
+    
+    rel_path = os.path.relpath(target_path, backend_dir)
+    
+    if not str(target_path).startswith(str(install_dir)):
+        print(os.environ['UNSORTED_PATH'])
+    else:
+        print(rel_path)
+except Exception:
+    print(os.environ.get('UNSORTED_PATH', '../ebooks/unsorted'))
+" 2>/dev/null || echo "../${EBOOKS_FOLDER}/unsorted")
+    
+    LIBRARY_REL=$(INSTALL_DIR_ABS="${INSTALL_DIR_ABS}" LIBRARY_PATH="${LIBRARY_PATH}" python3 -c "
+import os
+from pathlib import Path
+
+try:
+    install_dir = Path(os.environ['INSTALL_DIR_ABS']).resolve()
+    backend_dir = install_dir / 'backend'
+    target_path = Path(os.environ['LIBRARY_PATH']).resolve()
+    
+    rel_path = os.path.relpath(target_path, backend_dir)
+    
+    if not str(target_path).startswith(str(install_dir)):
+        print(os.environ['LIBRARY_PATH'])
+    else:
+        print(rel_path)
+except Exception:
+    print(os.environ.get('LIBRARY_PATH', '../ebooks/library'))
+" 2>/dev/null || echo "../${EBOOKS_FOLDER}/library")
+    
+    # Store absolute paths for directory creation
+    export QUARANTINE_ABS="${QUARANTINE_PATH}"
+    export UNSORTED_ABS="${UNSORTED_PATH}"
+    export LIBRARY_ABS="${LIBRARY_PATH}"
     
     echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  Kavita Authentication (Optional)"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Require users to log in with their Kavita credentials before uploading."
+    echo "This allows you to track who uploaded which files."
+    echo ""
+    
+    read -p "Enable Kavita authentication? (y/n) [n]: " ENABLE_KAVITA_AUTH
+    ENABLE_KAVITA_AUTH=${ENABLE_KAVITA_AUTH:-n}
+    
+    if [[ $ENABLE_KAVITA_AUTH =~ ^[Yy]$ ]]; then
+        read -p "Kavita server URL [http://localhost:5000]: " KAVITA_SERVER_URL
+        KAVITA_SERVER_URL=${KAVITA_SERVER_URL:-http://localhost:5000}
+        
+        echo ""
+        echo "Kavita API Key (optional):"
+        echo "If you have a Kavita API key, you can use it for authentication."
+        echo "Otherwise, users will log in with username/password."
+        read -s -p "Enter Kavita API Key (leave empty to skip): " KAVITA_API_KEY
+        echo ""
+        
+        if [ -n "$KAVITA_API_KEY" ]; then
+            # Show last 5 characters for verification
+            API_KEY_TAIL="${KAVITA_API_KEY: -5}"
+            read -s -p "Confirm Kavita API Key (leave empty to skip): " KAVITA_API_KEY_CONFIRM
+            echo ""
+            
+            if [ "$KAVITA_API_KEY" != "$KAVITA_API_KEY_CONFIRM" ]; then
+                log_warning "API keys do not match. Will use username/password authentication instead."
+                USE_API_KEY="false"
+                KAVITA_API_KEY=""
+            else
+                log_info "API key verification: ...${API_KEY_TAIL}"
+                USE_API_KEY="true"
+            fi
+        else
+            USE_API_KEY="false"
+            KAVITA_API_KEY=""
+        fi
+        
+        read -p "Require authentication for uploads? (y/n) [y]: " REQUIRE_AUTH
+        REQUIRE_AUTH=${REQUIRE_AUTH:-y}
+        
+        if [[ $REQUIRE_AUTH =~ ^[Yy]$ ]]; then
+            REQUIRE_AUTH_VAL="true"
+        else
+            REQUIRE_AUTH_VAL="false"
+        fi
+        
+        # Generate session secret
+        AUTH_SECRET=$(openssl rand -hex 32)
+        
+        KAVITA_ENABLED="true"
+    else
+        KAVITA_SERVER_URL="http://localhost:5000"
+        KAVITA_API_KEY=""
+        USE_API_KEY="false"
+        REQUIRE_AUTH_VAL="false"
+        AUTH_SECRET=$(openssl rand -hex 32)
+        KAVITA_ENABLED="false"
+    fi
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  VirusTotal Integration (Step 2)"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -263,19 +456,26 @@ generate_config() {
         echo ""
         read -s -p "Enter your VirusTotal API Key: " VIRUSTOTAL_KEY
         echo ""
-        read -s -p "Confirm API Key: " VIRUSTOTAL_KEY_CONFIRM
-        echo ""
         
-        if [ "$VIRUSTOTAL_KEY" != "$VIRUSTOTAL_KEY_CONFIRM" ]; then
-            log_warning "API keys do not match. Scanning will be disabled."
-            SCANNING_ENABLED="false"
-            VIRUSTOTAL_KEY=""
-        elif [ -z "$VIRUSTOTAL_KEY" ]; then
+        if [ -z "$VIRUSTOTAL_KEY" ]; then
             log_warning "No API key provided. Scanning will be disabled."
             SCANNING_ENABLED="false"
+            VIRUSTOTAL_KEY=""
         else
-            SCANNING_ENABLED="true"
-            log_success "VirusTotal API key configured"
+            # Show last 5 characters for verification
+            API_KEY_TAIL="${VIRUSTOTAL_KEY: -5}"
+            read -s -p "Confirm VirusTotal API Key: " VIRUSTOTAL_KEY_CONFIRM
+            echo ""
+            
+            if [ "$VIRUSTOTAL_KEY" != "$VIRUSTOTAL_KEY_CONFIRM" ]; then
+                log_warning "API keys do not match. Scanning will be disabled."
+                SCANNING_ENABLED="false"
+                VIRUSTOTAL_KEY=""
+            else
+                log_info "API key verification: ...${API_KEY_TAIL}"
+                SCANNING_ENABLED="true"
+                log_success "VirusTotal API key configured"
+            fi
         fi
     else
         SCANNING_ENABLED="false"
@@ -285,7 +485,7 @@ generate_config() {
     
     # Create config.yaml
     cat > config.yaml <<EOF
-# Kavita SafeUploader Configuration
+# Kavita Uploader Configuration
 # Generated by installer on $(date)
 
 server:
@@ -298,9 +498,9 @@ server:
   secret_key: "${SECRET_KEY}"
 
 folders:
-  quarantine: "./quarantine"
-  unsorted: "./unsorted"
-  library: "${LIBRARY_PATH}"
+  quarantine: "${QUARANTINE_REL}"
+  unsorted: "${UNSORTED_REL}"
+  library: "${LIBRARY_REL}"
 
 upload:
   max_file_size_mb: 25
@@ -375,9 +575,9 @@ preview:
 
 moving:
   enabled: true
-  unsorted_dir: "./unsorted"
+  unsorted_dir: "${UNSORTED_REL}"
   kavita_library_dirs:
-    - "${LIBRARY_PATH}"
+    - "${LIBRARY_REL}"
   rename_on_name_conflict: true
   rename_pattern: "{title} - {author} (duplicate_{timestamp}){ext}"
   discard_on_exact_duplicate: true
@@ -415,17 +615,188 @@ api_protection:
   disable_docs: true
   allow_docs_in_debug: true
 
+kavita:
+  enabled: ${KAVITA_ENABLED}
+  server_url: "${KAVITA_SERVER_URL}"
+  api_key: "${KAVITA_API_KEY}"
+  use_api_key: ${USE_API_KEY}
+  verify_ssl: true
+  timeout: 10
+
+auth:
+  require_auth: ${REQUIRE_AUTH_VAL}
+  session_secret: "${AUTH_SECRET}"
+  token_expiry_hours: 24
+  cookie_name: "kavita_uploader_token"
+
 logging:
   level: "INFO"
   format: "json"
   console_format: "text"
   console_level: "INFO"
-  file: "logs/safeuploader.log"
+  file: "logs/uploader.log"
   max_bytes: 10485760
   backup_count: 5
 EOF
     
     log_success "Configuration file created: config.yaml"
+}
+
+# Ensure directories from config.yaml exist with proper permissions
+ensure_config_directories() {
+    log_info "Ensuring directories from config.yaml exist..."
+    
+    USER=$(whoami)
+    INSTALL_DIR=$(pwd)
+    
+    # Read config.yaml and extract directory paths
+    if [ -f "config.yaml" ]; then
+        # Check if PyYAML is available
+        if python3 -c "import yaml" 2>/dev/null; then
+            # Use Python to parse YAML (more reliable than grep/sed)
+            DIRS_TO_CREATE=$(
+                python3 << 'PYEOF'
+import yaml
+import os
+from pathlib import Path
+
+try:
+    with open('config.yaml', 'r') as f:
+        config = yaml.safe_load(f) or {}
+    
+    install_dir = os.getcwd()
+    backend_dir = os.path.join(install_dir, 'backend')
+    dirs = set()
+    
+    # Extract folder paths (these are always directories)
+    # Paths in config are relative to backend/ directory (where app runs)
+    folders = config.get('folders', {})
+    if folders:
+        for key in ['quarantine', 'unsorted', 'library']:
+            path = folders.get(key, '')
+            if path and not path.startswith('${'):
+                if os.path.isabs(path):
+                    dirs.add(path)
+                else:
+                    # Resolve relative path from backend/ directory
+                    resolved_path = os.path.abspath(os.path.join(backend_dir, path))
+                    dirs.add(resolved_path)
+    
+    # Extract moving.unsorted_dir
+    moving = config.get('moving', {})
+    if moving:
+        unsorted_dir = moving.get('unsorted_dir', '')
+        if unsorted_dir and not unsorted_dir.startswith('${'):
+            if os.path.isabs(unsorted_dir):
+                dirs.add(unsorted_dir)
+            else:
+                # Resolve relative path from backend/ directory
+                resolved_path = os.path.abspath(os.path.join(backend_dir, unsorted_dir))
+                dirs.add(resolved_path)
+    
+    # Extract logging.file parent directory (relative to backend/)
+    logging = config.get('logging', {})
+    if logging:
+        log_file = logging.get('file', '')
+        if log_file and not log_file.startswith('${'):
+            if os.path.isabs(log_file):
+                dirs.add(os.path.dirname(log_file))
+            else:
+                # Resolve relative path from backend/ directory
+                resolved_path = os.path.abspath(os.path.join(backend_dir, log_file))
+                dirs.add(os.path.dirname(resolved_path))
+    
+    # Extract manifest_path parent directory (relative to backend/)
+    if moving:
+        manifest = moving.get('manifest_path', '')
+        if manifest and not manifest.startswith('${'):
+            if os.path.isabs(manifest):
+                dirs.add(os.path.dirname(manifest))
+            else:
+                # Resolve relative path from backend/ directory
+                resolved_path = os.path.abspath(os.path.join(backend_dir, manifest))
+                dirs.add(os.path.dirname(resolved_path))
+    
+    # Filter out empty strings and print one per line
+    for d in sorted(dirs):
+        if d:
+            print(d)
+except Exception as e:
+    # Fallback: just return empty if parsing fails
+    pass
+PYEOF
+            )
+        else
+            # Fallback: simple grep/sed approach for basic paths
+            log_warning "PyYAML not available, using basic directory detection"
+            DIRS_TO_CREATE=""
+            for key in quarantine unsorted library; do
+                path=$(grep -E "^  ${key}:" config.yaml | sed -E 's/^[^:]+:[[:space:]]*"?([^"]*)"?/\1/' | xargs)
+                if [ -n "$path" ] && [[ "$path" != *"\${"* ]]; then
+                    if [[ "$path" != /* ]]; then
+                        path="$INSTALL_DIR/$path"
+                    fi
+                    DIRS_TO_CREATE="${DIRS_TO_CREATE}${path}"$'\n'
+                fi
+            done
+            
+            # Also get unsorted_dir from moving section
+            unsorted_dir=$(grep -A 10 "^moving:" config.yaml | grep -E "^  unsorted_dir:" | sed -E 's/^[^:]+:[[:space:]]*"?([^"]*)"?/\1/' | xargs)
+            if [ -n "$unsorted_dir" ] && [[ "$unsorted_dir" != *"\${"* ]]; then
+                if [[ "$unsorted_dir" != /* ]]; then
+                    unsorted_dir="$INSTALL_DIR/$unsorted_dir"
+                fi
+                DIRS_TO_CREATE="${DIRS_TO_CREATE}${unsorted_dir}"$'\n'
+            fi
+            
+            # Get logs directory from logging.file
+            log_file=$(grep -A 10 "^logging:" config.yaml | grep -E "^  file:" | sed -E 's/^[^:]+:[[:space:]]*"?([^"]*)"?/\1/' | xargs)
+            if [ -n "$log_file" ] && [[ "$log_file" != *"\${"* ]]; then
+                if [[ "$log_file" != /* ]]; then
+                    log_file="$INSTALL_DIR/$log_file"
+                fi
+                log_dir=$(dirname "$log_file")
+                DIRS_TO_CREATE="${DIRS_TO_CREATE}${log_dir}"$'\n'
+            fi
+        fi
+        
+        # Create directories with proper ownership
+        while IFS= read -r dir_path; do
+            [ -z "$dir_path" ] && continue
+            
+            # Normalize path
+            dir_path=$(realpath -m "$dir_path" 2>/dev/null || echo "$dir_path")
+            
+            if [ ! -d "$dir_path" ]; then
+                log_info "Creating directory: $dir_path"
+                # Create parent directories first
+                sudo mkdir -p "$dir_path"
+                # Set ownership to user
+                sudo chown -R ${USER}:${USER} "$dir_path"
+                sudo chmod 755 "$dir_path"
+                log_success "Created directory: $dir_path"
+            else
+                # Ensure ownership is correct even if directory exists
+                sudo chown -R ${USER}:${USER} "$dir_path" 2>/dev/null || true
+            fi
+            
+            # If this is the unsorted directory, also create the processed subfolder
+            if grep -q "unsorted" <<< "$dir_path" 2>/dev/null || [[ "$dir_path" == *"unsorted"* ]]; then
+                processed_dir="${dir_path}/processed"
+                if [ ! -d "$processed_dir" ]; then
+                    log_info "Creating processed subfolder for Kavita: $processed_dir"
+                    sudo mkdir -p "$processed_dir"
+                    sudo chown -R ${USER}:${USER} "$processed_dir"
+                    sudo chmod 755 "$processed_dir"
+                    log_success "Created processed subfolder: $processed_dir"
+                fi
+            fi
+        done <<< "$DIRS_TO_CREATE"
+        
+        log_success "Configuration directories verified"
+    else
+        log_warning "config.yaml not found, skipping directory verification"
+    fi
 }
 
 # Create systemd service
@@ -435,19 +806,30 @@ create_systemd_service() {
     INSTALL_DIR=$(pwd)
     USER=$(whoami)
     
-    sudo tee /etc/systemd/system/kavita-safeuploader.service > /dev/null <<EOF
+    # Read root_path from config.yaml if it exists
+    ROOT_PATH_ENV=""
+    if [ -f "config.yaml" ]; then
+        ROOT_PATH=$(grep -E "^  root_path:" config.yaml | sed -E 's/^[^:]+:[[:space:]]*"?([^"]*)"?/\1/' | xargs)
+        if [ -n "$ROOT_PATH" ] && [ "$ROOT_PATH" != '""' ]; then
+            ROOT_PATH_ENV="Environment=\"SERVER_ROOT_PATH=${ROOT_PATH}\""
+        fi
+    fi
+    
+    sudo tee /etc/systemd/system/kavita-uploader.service > /dev/null <<EOF
 [Unit]
-Description=Kavita SafeUploader
+Description=Kavita Uploader
 After=network.target
 
 [Service]
 Type=simple
 User=${USER}
-WorkingDirectory=${INSTALL_DIR}
+Group=${USER}
+WorkingDirectory=${INSTALL_DIR}/backend
+Environment=PYTHONPATH=${INSTALL_DIR}/backend
 Environment="PATH=${INSTALL_DIR}/backend/venv/bin"
-ExecStart=${INSTALL_DIR}/backend/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port ${SERVER_PORT:-5050}
-Restart=always
-RestartSec=10
+ExecStart=${INSTALL_DIR}/backend/venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port ${SERVER_PORT:-5050}
+Restart=on-failure
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
@@ -456,8 +838,35 @@ EOF
     sudo systemctl daemon-reload
     
     log_success "Systemd service created"
-    log_info "To enable auto-start: sudo systemctl enable kavita-safeuploader"
-    log_info "To start service: sudo systemctl start kavita-safeuploader"
+    log_info "To enable auto-start: sudo systemctl enable kavita-uploader"
+    log_info "To start service: sudo systemctl start kavita-uploader"
+}
+
+# Fix any problematic code patterns before building
+fix_code_issues() {
+    log_info "Checking and fixing code issues..."
+    
+    # Fix main.py if it has the old upload_service.initialize() pattern
+    if [ -f "backend/app/main.py" ]; then
+        if grep -q "upload_service.initialize()" backend/app/main.py 2>/dev/null; then
+            log_warning "Found old upload_service.initialize() call - fixing..."
+            # Replace await upload_service.initialize() with config.ensure_directories()
+            sed -i 's/await upload_service\.initialize()/config.ensure_directories()/g' backend/app/main.py
+            log_success "Fixed upload_service.initialize() call in main.py"
+        fi
+        
+        # Fix any _ensure_directories() being awaited incorrectly
+        if grep -q "await.*_ensure_directories()" backend/app/main.py 2>/dev/null || \
+           grep -q "await.*_ensure_directories()" backend/app/*.py 2>/dev/null; then
+            log_warning "Found problematic await _ensure_directories() - fixing..."
+            # Remove await from _ensure_directories() calls (it's synchronous)
+            find backend/app -name "*.py" -type f -exec sed -i 's/await\s*self\._ensure_directories()/self._ensure_directories()/g' {} \;
+            find backend/app -name "*.py" -type f -exec sed -i 's/await\s*_ensure_directories()/_ensure_directories()/g' {} \;
+            log_success "Fixed _ensure_directories() await calls"
+        fi
+    fi
+    
+    log_success "Code issues checked"
 }
 
 # Build frontend for production
@@ -615,17 +1024,33 @@ display_completion() {
     echo "   uvicorn app.main:app --reload --host 0.0.0.0 --port ${SERVER_PORT:-5050}"
     echo ""
     echo "   Production mode (systemd):"
-    echo "   sudo systemctl start kavita-safeuploader"
-    echo "   sudo systemctl enable kavita-safeuploader  # Auto-start on boot"
+    echo "   sudo systemctl start kavita-uploader"
+    echo "   sudo systemctl enable kavita-uploader  # Auto-start on boot"
     echo ""
     echo "🌐 Access the application:"
     echo "   Web Interface: http://localhost:${SERVER_PORT:-5050}"
     echo "   API Documentation: http://localhost:${SERVER_PORT:-5050}/docs"
     echo ""
     echo "📋 Useful commands:"
-    echo "   View logs: journalctl -u kavita-safeuploader -f"
-    echo "   Stop service: sudo systemctl stop kavita-safeuploader"
-    echo "   Restart service: sudo systemctl restart kavita-safeuploader"
+    echo "   View logs: journalctl -u kavita-uploader -f"
+    echo "   Stop service: sudo systemctl stop kavita-uploader"
+    echo "   Restart service: sudo systemctl restart kavita-uploader"
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  ⚠️  IMPORTANT: Kavita Setup Required"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "1. Set Kavita Permissions:"
+    echo "   Find your Kavita user: ps aux | grep Kavita"
+    echo "   Then run:"
+    echo "   sudo usermod -a -G $(whoami) kavita"
+    echo "   chmod -R 750 ${UNSORTED_ABS}"
+    echo ""
+    echo "2. Configure Kavita Library:"
+    echo "   • Add a library in Kavita pointing to: ${UNSORTED_ABS}"
+    echo "   • Files will be saved to: ${UNSORTED_ABS}/processed/"
+    echo "   • DO NOT configure Kavita to scan the 'processed' subfolder"
+    echo "   • Kavita will automatically scan all subfolders"
     echo ""
     echo "📖 For more information, see README.md and INSTALL_NOTES.md"
     echo ""
@@ -635,7 +1060,7 @@ display_completion() {
 main() {
     echo ""
     echo "╔════════════════════════════════════════╗"
-    echo "║  Kavita SafeUploader Installer v0.1.0 ║"
+    echo "║  Kavita Uploader Installer v0.1.0 ║"
     echo "║  Ubuntu 24.04 LTS                      ║"
     echo "╚════════════════════════════════════════╝"
     echo ""
@@ -653,6 +1078,10 @@ main() {
     create_directories
     cleanup_old_database
     generate_config
+    
+    # Create user-specified directories from config (ensure_config_directories handles this)
+    ensure_config_directories
+    fix_code_issues
     build_frontend
     create_systemd_service
     
