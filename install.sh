@@ -1060,7 +1060,7 @@ display_completion() {
 main() {
     echo ""
     echo "╔════════════════════════════════════════╗"
-    echo "║  Kavita Uploader Installer v0.1.0 ║"
+    echo "║  Kavita Uploader Installer v0.1.0      ║"
     echo "║  Ubuntu 24.04 LTS                      ║"
     echo "╚════════════════════════════════════════╝"
     echo ""
